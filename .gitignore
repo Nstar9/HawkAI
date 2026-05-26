@@ -1,0 +1,55 @@
+# ============================================================
+# HawkAI — .gitignore
+# ============================================================
+
+# ---- Secrets / Environment  (NEVER commit these) -----------
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+
+# ---- Python --------------------------------------------
+backend/.venv/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.so
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# ---- Node / Next.js ------------------------------------
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/.env.local
+.next/
+out/
+
+# ---- macOS ---------------------------------------------
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# ---- Editor --------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ---- Logs ----------------------------------------------
+*.log
+
+# ---- Claude Code internal ------------------------------
+.claude/
