@@ -3,6 +3,8 @@
 > **Autonomous KYC/AML Intelligence Terminal** — researches any company, person, or fund and produces a structured financial crime risk report in under 90 seconds.
 
 
+**Live backend:** `https://hawkai-backend-pnkbbvfuoa-uc.a.run.app` — Google Cloud Run · us-central1
+
 ---
 
 ## What It Does
