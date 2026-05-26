@@ -2,7 +2,6 @@
 
 > **Autonomous KYC/AML Intelligence Terminal** — researches any company, person, or fund and produces a structured financial crime risk report in under 90 seconds.
 
-Built for the **[Google Cloud Rapid Agent Hackathon 2026](https://googlecloudrapidagenthackathon.devpost.com/)** — MongoDB track.
 
 ---
 
@@ -303,18 +302,6 @@ CORS_ORIGINS=["http://localhost:3000"]
 DEBUG=false
 ```
 
----
-
-## Hackathon Track
-
-- **Competition**: Google Cloud Rapid Agent Hackathon 2026
-- **Track**: MongoDB — agents that use MongoDB Atlas as a primary data store
-- **Deadline**: June 11, 2026 @ 4:00 PM CDT
-- **Key Differentiators**:
-  - MongoDB MCP Server gives the LLM native, schema-aware database access — no ORM, no glue code
-  - Vector similarity search surfaces hidden entity relationship networks automatically
-  - Full SSE streaming pipeline — investigators see every agent decision in real-time
-  - Production-grade Bloomberg Terminal UI that looks and operates like a real financial intelligence tool
 
 ---
 
