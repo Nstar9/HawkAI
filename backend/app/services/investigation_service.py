@@ -22,7 +22,7 @@ _TOOL_MESSAGES: dict[str, str] = {
     "extract_and_store_entity": "Extracting and storing entity profile…",
     "run_vector_similarity_search": "Running vector similarity search across entity database…",
     "classify_and_store_signals": "Classifying risk signals and matching watchlist patterns…",
-    "synthesize_risk_report": "Synthesizing final risk report with Gemini 2.5…",
+    "synthesize_risk_report": "Synthesizing final risk report…",
     "aggregate": "Running MongoDB correlation queries…",
     "find": "Querying MongoDB entity database…",
     "insert-one": "Persisting entity record to MongoDB…",
@@ -30,7 +30,7 @@ _TOOL_MESSAGES: dict[str, str] = {
 }
 
 # How long (seconds) the agent pipeline is allowed to run before we abort
-_PIPELINE_TIMEOUT = 180.0
+_PIPELINE_TIMEOUT = 420.0
 
 
 class InvestigationService:

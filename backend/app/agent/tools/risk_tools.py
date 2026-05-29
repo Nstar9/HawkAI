@@ -2,7 +2,7 @@ import json
 import re
 from typing import Any
 
-from app.agent.tools._gemini_retry import TOOLS_GEMINI_MODEL, gemini_with_retry
+from app.agent.tools._gemini_retry import get_tools_model, gemini_with_retry
 from app.config import get_settings
 from app.schemas.risk import RiskLevel, RiskSignalCreate, SignalType
 from app.services.mongodb_service import get_mongodb_service
@@ -92,7 +92,7 @@ Rules:
 
     response = await gemini_with_retry(
         lambda: client.aio.models.generate_content(
-            model=TOOLS_GEMINI_MODEL,
+            model=get_tools_model(),
             contents=classification_prompt,
             config=genai_types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -257,7 +257,7 @@ Rules:
 
     synthesis_response = await gemini_with_retry(
         lambda: client.aio.models.generate_content(
-            model=TOOLS_GEMINI_MODEL,
+            model=get_tools_model(),
             contents=synthesis_prompt,
             config=genai_types.GenerateContentConfig(
                 response_mime_type="application/json",

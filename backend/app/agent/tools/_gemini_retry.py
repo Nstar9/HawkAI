@@ -1,13 +1,9 @@
 """
 Shared retry helper for direct Gemini API calls in tools.
 
-The free tier for gemini-2.5-flash is 5 RPM / 500 RPD.
-The free tier for gemini-2.0-flash is 15 RPM / 1500 RPD.
-
-We use gemini-2.0-flash for structured-extraction tool calls (entity profile,
-signal classification, risk synthesis) since these are high-frequency.
-The ADK agent orchestration (ResearchAgent / IntelligenceAgent model selection)
-stays under config.gemini_model.
+Tool-level Gemini calls (entity extraction, signal classification, risk synthesis)
+use the same model as the agent (settings.gemini_model) so a single GEMINI_MODEL
+env-var swap covers the entire stack.
 
 On 429 RESOURCE_EXHAUSTED, we back off and retry up to MAX_RETRIES times.
 """
@@ -19,13 +15,16 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-# Model used for all direct tool-level Gemini calls
-TOOLS_GEMINI_MODEL = "gemini-2.0-flash-lite"
-
 # Maximum retries on rate-limit errors
 MAX_RETRIES = 3
 # Initial backoff in seconds (doubles each retry)
 INITIAL_BACKOFF = 8.0
+
+
+def get_tools_model() -> str:
+    """Return the configured Gemini model — read from settings at call time so env-var changes apply."""
+    from app.config import get_settings
+    return get_settings().gemini_model
 
 
 async def gemini_with_retry(
