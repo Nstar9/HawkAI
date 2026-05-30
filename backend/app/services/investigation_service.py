@@ -30,7 +30,7 @@ _TOOL_MESSAGES: dict[str, str] = {
 }
 
 # How long (seconds) the agent pipeline is allowed to run before we abort
-_PIPELINE_TIMEOUT = 420.0
+_PIPELINE_TIMEOUT = 600.0
 
 
 class InvestigationService:
