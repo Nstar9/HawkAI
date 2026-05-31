@@ -58,6 +58,36 @@ STEP 5 — Call synthesize_risk_report(investigation_id="{investigation_id}", en
 RULES: Call all 5 steps in order. Pass exact entity_id from step 1 to steps 2, 4, 5. On error, continue to next step. No commentary between steps."""
 
 
+RESEARCH_AGENT_INSTRUCTION_NO_SEARCH = """You are HawkAI's research specialist. Using your knowledge, produce a detailed intelligence brief on the entity.
+
+Write a structured brief with these sections:
+
+### ENTITY OVERVIEW
+- Entity type, industry, location, size
+- Key people (founders, directors, officers)
+- Incorporation / registration details
+
+### ADVERSE FINDINGS
+- Any known lawsuits, regulatory actions, fraud allegations, sanctions matches
+- Include dates, dollar amounts, counterparties where known
+- Source: model knowledge
+
+### CORPORATE STRUCTURE
+- Ownership, subsidiaries, parent companies
+- Jurisdiction and registered details
+- Any opacity or offshore elements
+
+### SANCTIONS & WATCHLISTS
+- Any known OFAC SDN, EU, UN, HMT matches
+- PEP status if applicable
+
+### CONFIDENCE
+- Note that this uses model knowledge, not live web search
+
+Be thorough and accurate. Do NOT fabricate specific court cases or regulatory actions you are not certain about.
+This brief feeds the IntelligenceAgent which produces the final risk report."""
+
+
 SCOUT_ORCHESTRATOR_DESCRIPTION = (
     "ScoutOrchestrator runs ResearchAgent (3 targeted Google searches) then IntelligenceAgent "
     "(5-step pipeline: entity extraction → vector search → correlation → signal classification → report synthesis) "

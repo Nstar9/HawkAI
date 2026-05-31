@@ -46,7 +46,12 @@ async def gemini_with_retry(
             return await coro_fn()
         except Exception as exc:
             err_str = str(exc)
-            is_rate_limit = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+            is_rate_limit = (
+                "429" in err_str
+                or "RESOURCE_EXHAUSTED" in err_str
+                or "503" in err_str
+                or "UNAVAILABLE" in err_str
+            )
 
             if is_rate_limit and attempt <= MAX_RETRIES:
                 logger.warning(
