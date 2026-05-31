@@ -23,10 +23,7 @@ _TOOL_MESSAGES: dict[str, str] = {
     "run_vector_similarity_search": "Running vector similarity search across entity database…",
     "classify_and_store_signals": "Classifying risk signals and matching watchlist patterns…",
     "synthesize_risk_report": "Synthesizing final risk report…",
-    "aggregate": "Running MongoDB correlation queries…",
-    "find": "Querying MongoDB entity database…",
-    "insert-one": "Persisting entity record to MongoDB…",
-    "update-one": "Updating investigation record in MongoDB…",
+    "find_correlated_entities": "Running MongoDB correlation queries…",
 }
 
 # How long (seconds) the agent pipeline is allowed to run before we abort
@@ -163,10 +160,6 @@ class InvestigationService:
                 "entity_type": investigation.entity_type.value,
                 "investigation_context": investigation.context or "",
                 "investigation_query": prompt,
-                # Pre-seed research_brief so {research_brief} template in
-                # INTELLIGENCE_AGENT_INSTRUCTION never throws "Context variable not found".
-                # ResearchAgent will overwrite this via output_key="research_brief".
-                "research_brief": "",
             },
         )
 
@@ -180,7 +173,6 @@ class InvestigationService:
 
         research_done = False
         final_text = ""
-        research_text_accumulator: list[str] = []
 
         async for event in runner.run_async(
             user_id=user_id,
@@ -201,11 +193,6 @@ class InvestigationService:
                             "agent_text",
                             {"agent": author, "text": part.text[:300]},
                         )
-                        # Accumulate ResearchAgent text so we can back-fill
-                        # the session state if ADK output_key propagation lags.
-                        if author == "ResearchAgent" and not research_done:
-                            research_text_accumulator.append(part.text)
-
                     # FIX 6: update step message in real-time based on which tool fires
                     if part.function_call:
                         tool_name = getattr(part.function_call, "name", "unknown")
@@ -236,20 +223,7 @@ class InvestigationService:
             if author == "ResearchAgent" and event.is_final_response():
                 if not research_done:
                     research_done = True
-                    # Back-fill session state with the accumulated research text.
-                    # This ensures {research_brief} template never throws "Context variable not found".
-                    compiled_brief = "\n".join(research_text_accumulator).strip()
-                    if compiled_brief:
-                        try:
-                            existing_session = await self._session_service.get_session(
-                                app_name=self._app_name,
-                                user_id=user_id,
-                                session_id=session.id,
-                            )
-                            if existing_session is not None:
-                                existing_session.state["research_brief"] = compiled_brief
-                        except Exception:
-                            pass  # Non-fatal — output_key should have set it already
+                    # Back-fill session state with the final research brief text only.
                     await self._set_step(
                         investigation_id,
                         InvestigationStepName.RESEARCH,

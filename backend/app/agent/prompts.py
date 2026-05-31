@@ -34,78 +34,28 @@ Be concise but thorough. Do NOT fabricate court cases, fines, or regulatory acti
 This brief feeds the IntelligenceAgent which produces the final risk report."""
 
 
-INTELLIGENCE_AGENT_INSTRUCTION = """You are HawkAI's intelligence engine. You receive a research brief and must produce a structured risk report stored in MongoDB.
-
-Research brief from ResearchAgent:
-{research_brief}
+INTELLIGENCE_AGENT_INSTRUCTION = """You are HawkAI's intelligence engine. The research brief from ResearchAgent is already in your conversation context above.
 
 Target entity:
 - Name: {entity_name}
 - Type: {entity_type}
 - Investigation ID: {investigation_id}
-- Context: {investigation_context}
 
-Work FAST. Execute these 5 steps in sequence without pausing or asking for clarification.
+Work FAST. Execute these 5 steps immediately without pausing or asking for clarification.
 
----
+STEP 1 — Call extract_and_store_entity(investigation_id="{investigation_id}", entity_name="{entity_name}", entity_type="{entity_type}", research_brief="<the research brief text from above>")
+→ SAVE the entity_id from the response.
 
-STEP 1 — EXTRACT AND STORE ENTITY PROFILE
-Call: extract_and_store_entity(
-    investigation_id="{investigation_id}",
-    entity_name="{entity_name}",
-    entity_type="{entity_type}",
-    research_brief="<paste the full research brief above>"
-)
-→ Extracts structured profile via Gemini, computes 768-dim embedding, stores entity in MongoDB.
-→ SAVE the entity_id returned — you need it for every subsequent step.
+STEP 2 — Call run_vector_similarity_search(entity_id="<entity_id>", limit=5)
 
----
+STEP 3 — Call find_correlated_entities(entity_id="<entity_id>", jurisdiction="<jurisdiction from step 1>", limit=5)
 
-STEP 2 — VECTOR SIMILARITY SEARCH
-Call: run_vector_similarity_search(
-    entity_id="<entity_id from step 1>",
-    limit=5
-)
-→ Finds the 5 most similar entities in our database using vector search.
-→ Note any matches with high similarity scores — they indicate network risk.
+STEP 4 — Call classify_and_store_signals(investigation_id="{investigation_id}", entity_id="<entity_id>", research_brief="<research brief>", adverse_findings="<adverse findings>")
 
----
+STEP 5 — Call synthesize_risk_report(investigation_id="{investigation_id}", entity_id="<entity_id>")
+→ THIS IS MANDATORY. Do not stop until synthesize_risk_report succeeds.
 
-STEP 3 — MONGODB CORRELATION QUERY
-Use the `aggregate` MCP tool on the 'entities' collection to find other entities in the same jurisdiction:
-[{{"$match": {{"metadata.jurisdiction": "<jurisdiction>", "_id": {{"$ne": "<entity_id>"}}}}}}, {{"$project": {{"name": 1, "risk_level": 1}}}}, {{"$limit": 5}}]
-
----
-
-STEP 4 — CLASSIFY AND STORE RISK SIGNALS
-Call: classify_and_store_signals(
-    investigation_id="{investigation_id}",
-    entity_id="<entity_id from step 1>",
-    research_brief="<the full research brief>",
-    adverse_findings="<comma-separated adverse findings from the brief>"
-)
-→ Classifies ALL risk signals via Gemini, matches watchlist patterns, stores in MongoDB.
-→ Note the count and types of signals found.
-
----
-
-STEP 5 — SYNTHESIZE FINAL REPORT (MANDATORY — DO NOT SKIP)
-Call: synthesize_risk_report(
-    investigation_id="{investigation_id}",
-    entity_id="<entity_id from step 1>"
-)
-→ Reads all signals from MongoDB, scores risk 0-100, writes Gemini-powered narrative.
-→ Updates investigation status to 'completed' in MongoDB.
-→ THIS COMPLETES THE INVESTIGATION. Your work is done after this call succeeds.
-
----
-
-CRITICAL RULES:
-1. You MUST call all 5 steps — do not skip any.
-2. synthesize_risk_report MUST be your final tool call — it is what marks the investigation complete.
-3. Always pass the exact entity_id from step 1 to steps 2, 4, and 5.
-4. If a tool returns an error, log it and continue to the next step.
-5. Do not add commentary or wait for confirmation between steps — execute immediately."""
+RULES: Call all 5 steps in order. Pass exact entity_id from step 1 to steps 2, 4, 5. On error, continue to next step. No commentary between steps."""
 
 
 SCOUT_ORCHESTRATOR_DESCRIPTION = (

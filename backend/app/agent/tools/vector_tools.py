@@ -3,6 +3,48 @@ from typing import Any
 from app.services.mongodb_service import get_mongodb_service
 
 
+async def find_correlated_entities(
+    entity_id: str,
+    jurisdiction: str = "",
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Find other entities in the database correlated by jurisdiction or risk profile.
+
+    Use this AFTER run_vector_similarity_search to find entities in the same jurisdiction.
+
+    Args:
+        entity_id: Current entity's ID (will be excluded from results).
+        jurisdiction: Jurisdiction/country to filter by (e.g. 'United States', 'BVI').
+        limit: Maximum number of results to return (default 5).
+
+    Returns:
+        A dict with 'matches' list. Each match has name, entity_type, risk_level.
+    """
+    db = get_mongodb_service()
+
+    query: dict[str, Any] = {}
+    if jurisdiction:
+        query["metadata.jurisdiction"] = {"$regex": jurisdiction, "$options": "i"}
+
+    try:
+        raw = await db.db["entities"].find(
+            {**query, "_id": {"$ne": entity_id}},
+            {"name": 1, "entity_type": 1, "risk_level": 1},
+        ).limit(limit).to_list(length=limit)
+
+        matches = [
+            {
+                "name": doc.get("name", ""),
+                "entity_type": doc.get("entity_type", ""),
+                "risk_level": doc.get("risk_level", "unknown"),
+            }
+            for doc in raw
+        ]
+        return {"status": "success", "matches": matches, "count": len(matches)}
+    except Exception as exc:
+        return {"status": "error", "matches": [], "message": str(exc)}
+
+
 async def run_vector_similarity_search(
     entity_id: str,
     limit: int = 8,
