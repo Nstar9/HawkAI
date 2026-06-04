@@ -39,9 +39,19 @@ _RETRYABLE_KEYWORDS = (
 
 
 def get_tools_model() -> str:
-    """Return the configured Gemini model — read from settings at call time."""
+    """Return the agent/tools model — read from settings at call time."""
     from app.config import get_settings
     return get_settings().gemini_model
+
+
+def get_synthesis_model() -> str:
+    """Return the synthesis model (used for classify + synthesize report).
+
+    Defaults to gemini-2.5-pro for maximum report quality. Can be overridden
+    to match gemini_model to reduce latency/cost if needed.
+    """
+    from app.config import get_settings
+    return get_settings().synthesis_model
 
 
 def _is_retryable(exc: Exception) -> bool:

@@ -10,13 +10,13 @@ import { Pipeline, PIPELINE_STEPS } from "./Pipeline";
 import { Label, Dot, Level } from "./atoms";
 import type { PipelineStep, QueueRow } from "./types";
 
-// ── Tool → pipeline step index (same as TerminalHome) ─────────
+// ── Tool → pipeline step index ────────────────────────────────
 const TOOL_TO_STEP_IDX: Record<string, number> = {
-  "extract_and_store_entity":    1,
-  "run_vector_similarity_search":2,
-  "aggregate":                   3,
-  "classify_and_store_signals":  4,
-  "synthesize_risk_report":      5,
+  "extract_and_store_entity":     1,
+  "run_vector_similarity_search": 2,
+  "find_correlated_entities":     3,
+  "classify_and_store_signals":   4,
+  "synthesize_risk_report":       5,
 };
 
 // ── Risk gauge SVG ─────────────────────────────────────────────
@@ -343,6 +343,14 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
                       <span style={{ color: "var(--hk-amber)" }}>{signals.length} SIGNAL{signals.length !== 1 ? "S" : ""}</span>
                     </>
                   )}
+                  {report?.analyst_confidence != null && (
+                    <>
+                      <span style={{ margin: "0 10px", color: "var(--hk-rule)" }}>·</span>
+                      <span style={{ color: "var(--hk-text-mute)" }}>
+                        CONFIDENCE {Math.round(report.analyst_confidence * 100)}%
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -547,6 +555,56 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
 
             {/* RIGHT: Signals + entity profile */}
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* Risk breakdown by category */}
+              {report?.risk_breakdown && Object.keys(report.risk_breakdown).length > 0 && (
+                <Section label="RISK BREAKDOWN">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    {Object.entries(report.risk_breakdown)
+                      .sort((a, b) => {
+                        const sevOrd = { critical: 4, high: 3, medium: 2, low: 1 };
+                        return (sevOrd[b[1].max_severity] ?? 0) - (sevOrd[a[1].max_severity] ?? 0);
+                      })
+                      .map(([cat, data]) => (
+                        <div key={cat} style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          gap: 8,
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                            <span style={{
+                              fontFamily: "var(--hk-mono)", fontSize: 9, letterSpacing: "0.08em",
+                              color: sigColor(data.max_severity), padding: "1px 4px",
+                              border: `1px solid ${sigColor(data.max_severity)}`,
+                              borderRadius: 2, flexShrink: 0, opacity: 0.8,
+                            }}>
+                              {sigAbbrev(cat)}
+                            </span>
+                            <div style={{
+                              flex: 1, height: 2,
+                              background: "var(--hk-rule)",
+                              borderRadius: 1,
+                              position: "relative",
+                            }}>
+                              <div style={{
+                                position: "absolute", left: 0, top: 0, bottom: 0,
+                                width: `${Math.min(100, data.count * 20)}%`,
+                                background: sigColor(data.max_severity),
+                                borderRadius: 1, opacity: 0.7,
+                              }} />
+                            </div>
+                          </div>
+                          <span style={{
+                            fontFamily: "var(--hk-mono)", fontSize: 10,
+                            color: "var(--hk-text-mute)", flexShrink: 0, minWidth: 20, textAlign: "right",
+                          }}>
+                            {data.count}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </Section>
+              )}
+
               {/* Risk signals */}
               <Section label={`RISK SIGNALS · ${sortedSignals.length}`}>
                 {sortedSignals.length === 0 ? (

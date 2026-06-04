@@ -43,12 +43,19 @@ export interface RiskSignal {
   created_at: string;
 }
 
+export interface RiskCategoryBreakdown {
+  count: number;
+  max_severity: RiskLevel;
+}
+
 export interface RiskReport {
   overall_risk_score: number;
   risk_level: RiskLevel;
   executive_summary: string;
   key_findings: string[];
   recommendations: string[];
+  risk_breakdown: Record<string, RiskCategoryBreakdown>;
+  analyst_confidence: number;
   correlated_entities: string[];
 }
 

@@ -19,14 +19,21 @@ class Settings(BaseSettings):
     google_cloud_project: str = ""
     google_cloud_location: str = "us-central1"
 
-    # Model — paid tier: gemini-2.0-flash (fast, cheap, reliable)
-    # Free tier fallback: gemini-3.5-flash
-    gemini_model: str = "gemini-2.0-flash"
+    # Agent model — used for ResearchAgent and IntelligenceAgent orchestration.
+    # gemini-2.5-flash: fast, capable, ideal for tool-calling agents.
+    gemini_model: str = "gemini-2.5-flash"
+
+    # Synthesis model — used for the two most important tool calls:
+    # classify_and_store_signals and synthesize_risk_report.
+    # gemini-2.5-pro delivers the highest-quality structured output.
+    # Set equal to gemini_model to reduce cost if needed.
+    synthesis_model: str = "gemini-2.5-pro"
+
     embedding_model: str = "gemini-embedding-001"
     embedding_dims: int = 768
 
-    # Set to true only if Google Search grounding quota is exhausted.
-    # The pipeline still runs using model knowledge when disabled.
+    # Fallback mode when Google Search grounding quota is exhausted.
+    # The pipeline continues using model knowledge — disable for live search.
     disable_google_search: bool = False
 
     # --- MongoDB ---

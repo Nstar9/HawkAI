@@ -35,12 +35,32 @@ class InvestigationCreate(BaseModel):
     context: str | None = None
 
 
+class RiskCategoryBreakdown(BaseModel):
+    """Per-category signal summary shown in the report sidebar."""
+    count: int
+    max_severity: RiskLevel
+
+
 class RiskReport(BaseModel):
     overall_risk_score: float = Field(ge=0.0, le=100.0)
     risk_level: RiskLevel
+
+    # One punchy paragraph — the most important finding, specific facts only.
     executive_summary: str
+
+    # 5–7 specific findings, each citing a verifiable fact (amount, date, body).
     key_findings: list[str] = Field(default_factory=list)
+
+    # Actionable compliance recommendations, prioritised and specific.
     recommendations: list[str] = Field(default_factory=list)
+
+    # Distribution of signals across risk categories.
+    risk_breakdown: dict[str, RiskCategoryBreakdown] = Field(default_factory=dict)
+
+    # How confident the analyst is in the overall assessment (0–1).
+    analyst_confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+
+    # IDs of strongly-correlated entities from vector search.
     correlated_entities: list[str] = Field(default_factory=list)
 
 
