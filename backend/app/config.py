@@ -13,20 +13,28 @@ class Settings(BaseSettings):
     app_name: str = "hawkai"
     debug: bool = False
 
+    # --- Google AI ---
     google_api_key: str = ""
     google_genai_use_vertexai: bool = False
     google_cloud_project: str = ""
     google_cloud_location: str = "us-central1"
-    gemini_model: str = "gemini-2.0-flash-lite"
+
+    # Model — paid tier: gemini-2.0-flash (fast, cheap, reliable)
+    # Free tier fallback: gemini-3.5-flash
+    gemini_model: str = "gemini-2.0-flash"
     embedding_model: str = "gemini-embedding-001"
     embedding_dims: int = 768
 
-    mongodb_uri: str = "mongodb://mongodb:27017"
+    # Set to true only if Google Search grounding quota is exhausted.
+    # The pipeline still runs using model knowledge when disabled.
+    disable_google_search: bool = False
+
+    # --- MongoDB ---
+    mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_database: str = "hawkai"
 
-    mcp_read_only: bool = False
-    cors_origins: list[str] = ["http://localhost:3000"]
-
+    # --- API ---
+    cors_origins: list[str] = ["*"]
     vector_search_limit: int = 10
     watchlist_seed_path: str = "data/watchlist_seeds.json"
 

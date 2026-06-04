@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
@@ -19,8 +19,16 @@ class NoteCreate(BaseModel):
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "service": "hawkai-api"}
+async def health() -> dict[str, Any]:
+    from app.config import get_settings
+    settings = get_settings()
+    return {
+        "status": "ok",
+        "service": "hawkai-api",
+        "version": "1.0.0",
+        "model": settings.gemini_model,
+        "search": "disabled" if settings.disable_google_search else "live",
+    }
 
 
 # --- Investigations ---

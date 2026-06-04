@@ -1,4 +1,15 @@
+"""Investigation orchestration service.
+
+Manages the full lifecycle of a HawkAI investigation:
+  1. Creates a pending investigation record in MongoDB
+  2. Spawns a background asyncio task that runs the ADK agent pipeline
+  3. Publishes SSE events to all connected subscribers in real-time
+  4. Handles timeouts, quota errors, and transient failures gracefully
+"""
+
 import asyncio
+import logging
+import re
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any, AsyncGenerator
@@ -17,25 +28,54 @@ from app.schemas.investigation import (
 )
 from app.services.mongodb_service import get_mongodb_service
 
-# Map IntelligenceAgent tool calls → human-readable step messages shown in the UI
-_TOOL_MESSAGES: dict[str, str] = {
+logger = logging.getLogger(__name__)
+
+# Human-readable step messages keyed by IntelligenceAgent tool name
+_TOOL_STEP_MESSAGES: dict[str, str] = {
     "extract_and_store_entity": "Extracting and storing entity profile…",
-    "run_vector_similarity_search": "Running vector similarity search across entity database…",
-    "classify_and_store_signals": "Classifying risk signals and matching watchlist patterns…",
-    "synthesize_risk_report": "Synthesizing final risk report…",
+    "run_vector_similarity_search": "Running vector similarity search…",
     "find_correlated_entities": "Running MongoDB correlation queries…",
+    "classify_and_store_signals": "Classifying risk signals…",
+    "synthesize_risk_report": "Synthesizing final risk report…",
 }
 
-# How long (seconds) the agent pipeline is allowed to run before we abort
-_PIPELINE_TIMEOUT = 600.0
+# Hard timeout for the entire pipeline (research + intelligence)
+_PIPELINE_TIMEOUT_SECONDS = 600.0
+
+
+def _user_friendly_error(raw: str) -> str:
+    """Convert raw exception text into a short, user-friendly message."""
+    if "RESOURCE_EXHAUSTED" in raw or "429" in raw:
+        return (
+            "Gemini API quota reached. The pipeline will auto-retry shortly. "
+            "If this persists, the daily free-tier limit has been hit — "
+            "please check Google AI Studio quota or try again tomorrow."
+        )
+    if "UNAVAILABLE" in raw or "503" in raw or "high demand" in raw.lower():
+        return "Gemini API is temporarily overloaded. Please retry in a moment."
+    if "timed out" in raw.lower():
+        return (
+            "Investigation timed out — the pipeline exceeded the 10-minute limit. "
+            "This is usually caused by slow model responses. Please try again."
+        )
+    if "Context variable not found" in raw:
+        return "Internal agent context error. Please retry the investigation."
+    # Generic fallback — never expose raw stack traces to the frontend
+    return "Investigation failed due to an unexpected error. Please try again."
 
 
 class InvestigationService:
+    """Singleton service that owns the ADK Runner and pub/sub event bus."""
+
     def __init__(self) -> None:
         self._settings = get_settings()
         self._app_name = self._settings.app_name
         self._session_service = InMemorySessionService()
         self._subscribers: dict[str, list[asyncio.Queue[dict[str, Any]]]] = defaultdict(list)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     async def create(self, payload: InvestigationCreate) -> Investigation:
         db = get_mongodb_service()
@@ -54,54 +94,123 @@ class InvestigationService:
     # ------------------------------------------------------------------
 
     def subscribe(self, investigation_id: str) -> asyncio.Queue[dict[str, Any]]:
-        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-        self._subscribers[investigation_id].append(queue)
-        return queue
+        q: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._subscribers[investigation_id].append(q)
+        return q
 
-    def unsubscribe(self, investigation_id: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
+    def unsubscribe(self, investigation_id: str, q: asyncio.Queue[dict[str, Any]]) -> None:
         subs = self._subscribers.get(investigation_id, [])
-        if queue in subs:
-            subs.remove(queue)
+        if q in subs:
+            subs.remove(q)
 
     async def stream_events(
-        self,
-        investigation_id: str,
+        self, investigation_id: str
     ) -> AsyncGenerator[dict[str, Any], None]:
         investigation = await self.get(investigation_id)
         if investigation is None:
-            yield {"event": "error", "data": {"message": "Investigation not found"}}
+            yield {"event": "error", "data": {"message": "Investigation not found."}}
             return
 
         yield {"event": "snapshot", "data": investigation.model_dump(mode="json")}
 
+        # Already terminal — send final state and close immediately
         if investigation.status in (InvestigationStatus.COMPLETED, InvestigationStatus.FAILED):
             yield {"event": "done", "data": {"status": investigation.status.value}}
             return
 
-        queue = self.subscribe(investigation_id)
+        q = self.subscribe(investigation_id)
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=600.0)
+                    event = await asyncio.wait_for(q.get(), timeout=660.0)
                 except asyncio.TimeoutError:
-                    yield {"event": "error", "data": {"message": "Stream timed out after 10 minutes."}}
+                    yield {
+                        "event": "error",
+                        "data": {"message": "Stream timed out — no events for 11 minutes."},
+                    }
                     break
                 yield event
                 if event.get("event") in ("done", "error"):
                     break
         finally:
-            self.unsubscribe(investigation_id, queue)
+            self.unsubscribe(investigation_id, q)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
     async def _publish(self, investigation_id: str, event: str, data: dict[str, Any]) -> None:
         payload = {"event": event, "data": data}
-        for queue in self._subscribers.get(investigation_id, []):
-            await queue.put(payload)
+        for q in self._subscribers.get(investigation_id, []):
+            await q.put(payload)
+
+    async def _set_step(
+        self,
+        investigation_id: str,
+        name: InvestigationStepName,
+        status: InvestigationStatus,
+        message: str,
+    ) -> None:
+        db = get_mongodb_service()
+        investigation = await db.get_investigation(investigation_id)
+        if investigation is None:
+            return
+
+        now = datetime.now(UTC)
+        steps = list(investigation.steps)
+        existing = next((s for s in steps if s.name == name), None)
+
+        if existing:
+            existing.status = status
+            existing.message = message
+            if status == InvestigationStatus.RUNNING:
+                existing.started_at = now
+            elif status in (InvestigationStatus.COMPLETED, InvestigationStatus.FAILED):
+                existing.completed_at = now
+        else:
+            steps.append(
+                InvestigationStep(
+                    name=name,
+                    status=status,
+                    message=message,
+                    started_at=now if status == InvestigationStatus.RUNNING else None,
+                    completed_at=(
+                        now
+                        if status in (InvestigationStatus.COMPLETED, InvestigationStatus.FAILED)
+                        else None
+                    ),
+                )
+            )
+
+        await db.update_investigation(
+            investigation_id,
+            steps=[s.model_dump(mode="json") for s in steps],
+        )
+        await self._publish(
+            investigation_id,
+            "step",
+            {"name": name.value, "status": status.value, "message": message},
+        )
+
+    def _build_prompt(self, investigation: Investigation) -> str:
+        context = f"\nAdditional context: {investigation.context}" if investigation.context else ""
+        return (
+            f"Investigate this entity and produce a complete risk intelligence report.\n\n"
+            f"Entity name: {investigation.entity_name}\n"
+            f"Entity type: {investigation.entity_type.value}\n"
+            f"Investigation ID: {investigation.id}{context}\n\n"
+            f"ResearchAgent: Run 2 targeted searches and write a structured intelligence brief.\n"
+            f"IntelligenceAgent: Execute the 5-step pipeline — extract entity → vector search → "
+            f"correlate → classify signals → synthesize report. "
+            f"You MUST call synthesize_risk_report as the final step."
+        )
 
     # ------------------------------------------------------------------
-    # Pipeline orchestration — FIX 3: 180-second hard timeout
+    # Pipeline orchestration
     # ------------------------------------------------------------------
 
     async def _run_pipeline(self, investigation_id: str) -> None:
+        """Top-level pipeline runner — handles all errors and timeout."""
         db = get_mongodb_service()
         investigation = await db.get_investigation(investigation_id)
         if investigation is None:
@@ -113,40 +222,37 @@ class InvestigationService:
             investigation_id,
             InvestigationStepName.RESEARCH,
             InvestigationStatus.RUNNING,
-            "ResearchAgent running 3 targeted searches…",
+            "ResearchAgent gathering intelligence…",
         )
 
         try:
             await asyncio.wait_for(
                 self._execute_pipeline(investigation_id, investigation),
-                timeout=_PIPELINE_TIMEOUT,
+                timeout=_PIPELINE_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
-            err = (
-                f"Investigation timed out after {int(_PIPELINE_TIMEOUT)}s. "
-                "Try again or check Google API quota."
-            )
-            await db.update_investigation(
+            await self._fail(
                 investigation_id,
-                status=InvestigationStatus.FAILED.value,
-                error=err,
+                "Investigation timed out — the pipeline exceeded the 10-minute limit. Please retry.",
             )
-            await self._publish(investigation_id, "error", {"message": err})
-            await self._publish(investigation_id, "done", {"status": "failed"})
         except Exception as exc:
-            err_msg = str(exc)
-            await db.update_investigation(
-                investigation_id,
-                status=InvestigationStatus.FAILED.value,
-                error=err_msg,
-            )
-            await self._publish(investigation_id, "error", {"message": err_msg})
-            await self._publish(investigation_id, "done", {"status": "failed"})
+            logger.exception("Pipeline error for investigation %s", investigation_id)
+            await self._fail(investigation_id, _user_friendly_error(str(exc)))
+
+    async def _fail(self, investigation_id: str, message: str) -> None:
+        db = get_mongodb_service()
+        await db.update_investigation(
+            investigation_id,
+            status=InvestigationStatus.FAILED.value,
+            error=message,
+        )
+        await self._publish(investigation_id, "error", {"message": message})
+        await self._publish(investigation_id, "done", {"status": "failed"})
 
     async def _execute_pipeline(
         self, investigation_id: str, investigation: Investigation
     ) -> None:
-        """Core ADK agent run — called inside asyncio.wait_for for timeout safety."""
+        """Core ADK agent run — called inside asyncio.wait_for."""
         db = get_mongodb_service()
         prompt = self._build_prompt(investigation)
         user_id = f"inv-{investigation_id}"
@@ -191,39 +297,36 @@ class InvestigationService:
                         await self._publish(
                             investigation_id,
                             "agent_text",
-                            {"agent": author, "text": part.text[:300]},
+                            {"agent": author, "text": part.text[:400]},
                         )
-                    # FIX 6: update step message in real-time based on which tool fires
+
                     if part.function_call:
-                        tool_name = getattr(part.function_call, "name", "unknown")
+                        tool_name = getattr(part.function_call, "name", "") or ""
                         await self._publish(
                             investigation_id,
                             "tool_call",
                             {"agent": author, "tool": tool_name},
                         )
-                        if research_done and tool_name in _TOOL_MESSAGES:
+                        if research_done and tool_name in _TOOL_STEP_MESSAGES:
                             await self._set_step(
                                 investigation_id,
                                 InvestigationStepName.INTELLIGENCE,
                                 InvestigationStatus.RUNNING,
-                                _TOOL_MESSAGES[tool_name],
+                                _TOOL_STEP_MESSAGES[tool_name],
                             )
 
                     if part.function_response:
-                        tool_name = getattr(part.function_response, "name", "unknown")
+                        tool_name = getattr(part.function_response, "name", "") or ""
                         await self._publish(
                             investigation_id,
                             "tool_result",
                             {"agent": author, "tool": tool_name},
                         )
 
-            # ResearchAgent finished → explicitly write research_brief to session
-            # state so the {research_brief} template in INTELLIGENCE_AGENT_INSTRUCTION
-            # is guaranteed to resolve even if ADK output_key propagation is delayed.
+            # ResearchAgent finished
             if author == "ResearchAgent" and event.is_final_response():
                 if not research_done:
                     research_done = True
-                    # Back-fill session state with the final research brief text only.
                     await self._set_step(
                         investigation_id,
                         InvestigationStepName.RESEARCH,
@@ -243,10 +346,10 @@ class InvestigationService:
                     investigation_id,
                     InvestigationStepName.INTELLIGENCE,
                     InvestigationStatus.COMPLETED,
-                    "Entity intelligence analysis complete.",
+                    "Intelligence analysis complete.",
                 )
 
-        # Check whether synthesize_risk_report was actually called
+        # Verify synthesize_risk_report was called and completed
         updated = await db.get_investigation(investigation_id)
         if updated and updated.result and updated.result.report:
             await self._set_step(
@@ -262,89 +365,22 @@ class InvestigationService:
             )
             await self._publish(investigation_id, "done", {"status": "completed"})
         else:
-            err = (
-                "Agent pipeline finished but synthesize_risk_report was never called. "
-                "The IntelligenceAgent may have stopped early. Check agent logs."
-            )
-            await db.update_investigation(
+            await self._fail(
                 investigation_id,
-                status=InvestigationStatus.FAILED.value,
-                error=err,
-                metadata={"raw_output": final_text[:3000]},
-            )
-            await self._publish(investigation_id, "error", {"message": err})
-            await self._publish(investigation_id, "done", {"status": "failed"})
-
-    # ------------------------------------------------------------------
-    # Step management
-    # ------------------------------------------------------------------
-
-    async def _set_step(
-        self,
-        investigation_id: str,
-        name: InvestigationStepName,
-        status: InvestigationStatus,
-        message: str,
-    ) -> None:
-        db = get_mongodb_service()
-        investigation = await db.get_investigation(investigation_id)
-        if investigation is None:
-            return
-
-        now = datetime.now(UTC)
-        steps = list(investigation.steps)
-        existing = next((s for s in steps if s.name == name), None)
-        if existing:
-            existing.status = status
-            existing.message = message
-            if status == InvestigationStatus.RUNNING:
-                existing.started_at = now
-            elif status in (InvestigationStatus.COMPLETED, InvestigationStatus.FAILED):
-                existing.completed_at = now
-        else:
-            steps.append(
-                InvestigationStep(
-                    name=name,
-                    status=status,
-                    message=message,
-                    started_at=now if status == InvestigationStatus.RUNNING else None,
-                    completed_at=now if status in (InvestigationStatus.COMPLETED, InvestigationStatus.FAILED) else None,
-                )
+                "The intelligence pipeline completed but the final risk report was not generated. "
+                "This usually means the AI stopped before calling synthesize_risk_report. Please retry.",
             )
 
-        await db.update_investigation(
-            investigation_id,
-            steps=[s.model_dump(mode="json") for s in steps],
-        )
-        await self._publish(
-            investigation_id,
-            "step",
-            {"name": name.value, "status": status.value, "message": message},
-        )
 
-    # ------------------------------------------------------------------
-    # Prompt builder
-    # ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Module-level singleton
+# ---------------------------------------------------------------------------
 
-    def _build_prompt(self, investigation: Investigation) -> str:
-        context_line = f"\nAdditional context: {investigation.context}" if investigation.context else ""
-        return (
-            f"Investigate this entity and produce a complete risk intelligence report.\n\n"
-            f"Entity name: {investigation.entity_name}\n"
-            f"Entity type: {investigation.entity_type.value}\n"
-            f"Investigation ID: {investigation.id}{context_line}\n\n"
-            f"ResearchAgent: Run exactly 3 targeted Google searches and produce a structured intelligence brief.\n"
-            f"IntelligenceAgent: Execute the 5-step pipeline — extract entity → vector search → "
-            f"correlation query → classify signals → synthesize report. "
-            f"You MUST call synthesize_risk_report as the final step."
-        )
-
-
-_investigation_service: InvestigationService | None = None
+_service: InvestigationService | None = None
 
 
 def get_investigation_service() -> InvestigationService:
-    global _investigation_service
-    if _investigation_service is None:
-        _investigation_service = InvestigationService()
-    return _investigation_service
+    global _service
+    if _service is None:
+        _service = InvestigationService()
+    return _service
