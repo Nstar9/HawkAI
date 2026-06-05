@@ -53,15 +53,17 @@ export function invToDossierRow(inv: Investigation, idx: number): DossierRow & {
     .map(([name, count]) => [name, count]);
 
   return {
-    id:    shortId,
-    t:     toRelativeTime(inv.created_at),
-    name:  inv.entity_name,
-    kind:  toEntityKind(inv.entity_type),
-    juris: "—",
-    risk:  Math.round(report?.overall_risk_score ?? 0),
+    id:         shortId,
+    t:          toRelativeTime(inv.created_at),
+    name:       inv.entity_name,
+    kind:       toEntityKind(inv.entity_type),
+    juris:      "—",
+    risk:       Math.round(report?.overall_risk_score ?? 0),
     level,
     sig,
-    delta: 0,
+    confidence: report?.analyst_confidence != null
+      ? Math.round(report.analyst_confidence * 100)
+      : null,
     color: levelColor(level),
     _invId: inv.id,
   };
@@ -69,8 +71,8 @@ export function invToDossierRow(inv: Investigation, idx: number): DossierRow & {
 
 // ── Component ──────────────────────────────────────────────
 
-const COLUMNS = ["", "ID", "TIME", "ENTITY", "TYPE", "JURIS", "RISK", "LEVEL", "SIGNALS", "Δ 7D"] as const;
-const GRID = "16px 80px 60px 1fr 70px 60px 70px 70px 1.1fr 60px";
+const COLUMNS = ["", "ID", "TIME", "ENTITY", "TYPE", "JURIS", "RISK", "LEVEL", "SIGNALS", "CONF"] as const;
+const GRID = "16px 80px 60px 1fr 70px 60px 70px 70px 1.1fr 52px";
 const FILTERS: readonly DossierFilter[] = ["ALL", "CRIT", "HIGH", "MED", "LOW"] as const;
 
 export interface DossierTableProps {
@@ -201,10 +203,12 @@ export function DossierTable({ investigations, highlightId }: DossierTableProps)
               </div>
 
               <span style={{
-                color: r.delta > 0 ? "var(--hk-red)" : r.delta < 0 ? "var(--hk-green)" : "var(--hk-text-mute)",
-                fontSize: 11,
+                color: r.confidence != null
+                  ? (r.confidence >= 85 ? "var(--hk-green)" : r.confidence >= 65 ? "var(--hk-amber)" : "var(--hk-text-mute)")
+                  : "var(--hk-text-mute)",
+                fontSize: 12, fontFamily: "var(--hk-mono)",
               }}>
-                {r.delta === 0 ? "·" : r.delta > 0 ? `▲ +${r.delta}` : `▼ ${r.delta}`}
+                {r.confidence != null ? `${r.confidence}%` : "—"}
               </span>
             </div>
           );

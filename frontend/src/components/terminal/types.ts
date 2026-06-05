@@ -59,8 +59,8 @@ export interface DossierRow {
   risk: number;
   level: RiskLevel;
   sig: SignalChip[];
-  /** 7-day delta, +/- integer; 0 = unchanged */
-  delta: number;
+  /** Analyst confidence 0–100, null if not available */
+  confidence: number | null;
   /** CSS color (use a CSS var) */
   color: string;
 }

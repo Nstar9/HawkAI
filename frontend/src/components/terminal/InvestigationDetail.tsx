@@ -227,6 +227,10 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
     (sevOrder[a.severity] ?? 4) - (sevOrder[b.severity] ?? 4)
   );
 
+  function handleExportPDF() {
+    window.print();
+  }
+
   async function handleAddNote() {
     if (!noteText.trim() || !entity) return;
     setSavingNote(true);
@@ -249,8 +253,8 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
           overflowY: "auto", padding: "24px 28px 32px",
           position: "relative", zIndex: 2,
         }}>
-          {/* Back nav */}
-          <div style={{ marginBottom: 20 }}>
+          {/* Back nav + export */}
+          <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
             <button
               type="button"
               onClick={() => router.push("/")}
@@ -264,6 +268,30 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
             >
               ← BACK TO TERMINAL
             </button>
+            <span style={{ flex: 1 }} />
+            {/* KYC disclaimer */}
+            <span style={{
+              fontFamily: "var(--hk-mono)", fontSize: 11, color: "var(--hk-text-mute)",
+              padding: "4px 10px", border: "1px solid var(--hk-rule)", borderRadius: 2,
+            }}>
+              ⚠ KYC/AML COMPLIANCE SCREEN — NOT INVESTMENT ADVICE
+            </span>
+            {inv?.status === "completed" && (
+              <button
+                type="button"
+                onClick={handleExportPDF}
+                className="hk-bare-btn"
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  fontFamily: "var(--hk-mono)", fontSize: 11, letterSpacing: "0.08em",
+                  color: "var(--hk-bg)", padding: "5px 14px",
+                  background: "var(--hk-amber)", borderRadius: 2,
+                  fontWeight: 700,
+                }}
+              >
+                ↓ EXPORT PDF
+              </button>
+            )}
           </div>
 
           {/* ── Entity header ── */}

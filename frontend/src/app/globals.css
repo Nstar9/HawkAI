@@ -136,6 +136,15 @@ html, body {
 }
 .hk-cursor { animation: hk-cursor-blink 1.1s step-end infinite; }
 
+/* ── Print / PDF export ─────────────────────────────────────── */
+@media print {
+  .hk-shell::before { display: none; }      /* remove scanlines */
+  body { background: #fff !important; color: #000 !important; overflow: visible !important; }
+  nav, aside, button { display: none !important; }
+  main { overflow: visible !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
 /* amber pulse for active pipeline step */
 @keyframes hk-amber-pulse {
   0%, 100% { opacity: 1; }

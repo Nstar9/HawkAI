@@ -101,6 +101,19 @@ async def add_entity_note(entity_id: str, payload: NoteCreate) -> Entity:
 
 
 # ---------------------------------------------------------------------------
+# Maintenance — clean up failed investigations
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/investigations/failed")
+async def delete_failed_investigations() -> dict[str, int]:
+    """Delete all failed investigations to keep the dossier list clean."""
+    db = get_mongodb_service()
+    result = await db.db["investigations"].delete_many({"status": "failed"})
+    return {"deleted": result.deleted_count}
+
+
+# ---------------------------------------------------------------------------
 # Watchlists — expose the internal watchlist patterns used in classification
 # ---------------------------------------------------------------------------
 
