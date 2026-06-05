@@ -132,7 +132,7 @@ export function DossierTable({ investigations, highlightId }: DossierTableProps)
         <div style={{
           display: "grid", gridTemplateColumns: GRID, gap: 14, padding: "10px 16px",
           borderBottom: "1px solid var(--hk-rule)",
-          fontFamily: "var(--hk-mono)", fontSize: 10, letterSpacing: "0.1em",
+          fontFamily: "var(--hk-mono)", fontSize: 11, letterSpacing: "0.1em",
           color: "var(--hk-text-mute)", background: "var(--hk-bg-2)",
           position: "sticky", top: 0,
         }}>
@@ -143,7 +143,7 @@ export function DossierTable({ investigations, highlightId }: DossierTableProps)
         {filtered.length === 0 && (
           <div style={{
             padding: "40px 16px", textAlign: "center",
-            fontFamily: "var(--hk-mono)", fontSize: 11, color: "var(--hk-text-mute)",
+            fontFamily: "var(--hk-mono)", fontSize: 13, color: "var(--hk-text-mute)",
           }}>
             NO DOSSIERS · RUN AN INVESTIGATION TO POPULATE
           </div>
@@ -163,7 +163,7 @@ export function DossierTable({ investigations, highlightId }: DossierTableProps)
                 background: isHighlighted
                   ? "rgba(244,185,66,0.05)"
                   : i === 0 ? "rgba(244,185,66,0.02)" : "transparent",
-                fontFamily: "var(--hk-mono)", fontSize: 12, color: "var(--hk-text)",
+                fontFamily: "var(--hk-mono)", fontSize: 13, color: "var(--hk-text)",
                 cursor: "pointer",
                 transition: "background 0.12s",
               }}

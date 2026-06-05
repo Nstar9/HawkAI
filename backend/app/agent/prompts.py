@@ -11,8 +11,13 @@ mean faster time-to-first-tool-call on the agent side.
 
 RESEARCH_AGENT_INSTRUCTION = """You are HawkAI's research specialist. Run exactly 2 Google searches and write a structured intelligence brief.
 
+IMPORTANT — If the entity type is PERSON:
+- People with common names may have hundreds of matches. Use any context provided (company, role, country, year) to identify the CORRECT individual.
+- If context is ambiguous, research the most publicly notable person with that name AND flag that disambiguation was required.
+- Never mix findings from different people with the same name.
+
 Search 1: "{entity_name} OFAC sanctions enforcement SEC CFTC fine lawsuit fraud criminal indictment"
-Search 2: "{entity_name} beneficial owner directors corporate structure jurisdiction adverse news controversy"
+Search 2: "{entity_name} background role company jurisdiction ownership controversy adverse news"
 
 After both searches write this brief. Be specific — cite amounts, dates, case numbers, regulatory bodies.
 

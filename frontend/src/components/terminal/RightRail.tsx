@@ -35,10 +35,24 @@ export function RightRail({ investigations, liveQueue, activeInvestigationName }
     return l === "critical" || l === "high";
   }).length;
 
+  // Calculate real average pipeline duration from completed investigations
+  const durations: number[] = [];
+  for (const inv of completed) {
+    const research = inv.steps?.find(s => s.name === "research");
+    const complete = inv.steps?.find(s => s.name === "complete");
+    if (research?.started_at && complete?.completed_at) {
+      const ms = new Date(complete.completed_at).getTime() - new Date(research.started_at).getTime();
+      if (ms > 0 && ms < 600_000) durations.push(ms / 1000);
+    }
+  }
+  const avgPipeline = durations.length > 0
+    ? `~${Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)}s`
+    : "—";
+
   const stats = [
     ["DOSSIERS",     String(completed.length || 0), "var(--hk-text)"],
-    ["HIGH-RISK",    String(highCritical),           "var(--hk-red)"],
-    ["AVG PIPELINE", "~90s",                         "var(--hk-amber)"],
+    ["HIGH-RISK",    String(highCritical),           highCritical > 0 ? "var(--hk-red)" : "var(--hk-text)"],
+    ["AVG PIPELINE", avgPipeline,                   "var(--hk-amber)"],
     ["SIGNALS",      String(
        completed.reduce((acc, i) => acc + (i.result?.signals?.length ?? 0), 0)
      ), "var(--hk-text)"],

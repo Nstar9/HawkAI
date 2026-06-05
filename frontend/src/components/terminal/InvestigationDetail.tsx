@@ -389,8 +389,8 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
               {report?.executive_summary && (
                 <Section label="EXECUTIVE SUMMARY">
                   <p style={{
-                    fontFamily: "var(--hk-mono)", fontSize: 12, color: "var(--hk-text)",
-                    lineHeight: 1.75, margin: 0,
+                    fontFamily: "var(--hk-mono)", fontSize: 14, color: "var(--hk-text)",
+                    lineHeight: 1.8, margin: 0,
                   }}>
                     {report.executive_summary}
                   </p>
@@ -412,8 +412,8 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
                           {String(i + 1).padStart(2, "0")}
                         </span>
                         <span style={{
-                          fontFamily: "var(--hk-mono)", fontSize: 11, color: "var(--hk-text)",
-                          lineHeight: 1.65,
+                          fontFamily: "var(--hk-mono)", fontSize: 13, color: "var(--hk-text)",
+                          lineHeight: 1.7,
                         }}>
                           {f}
                         </span>
@@ -438,8 +438,8 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
                           ▸
                         </span>
                         <span style={{
-                          fontFamily: "var(--hk-mono)", fontSize: 11, color: "var(--hk-text)",
-                          lineHeight: 1.65,
+                          fontFamily: "var(--hk-mono)", fontSize: 13, color: "var(--hk-text)",
+                          lineHeight: 1.7,
                         }}>
                           {r}
                         </span>
@@ -752,7 +752,7 @@ function SignalRow({ signal }: { signal: RiskSignal }) {
           {sigAbbrev(signal.signal_type)}
         </span>
         <span style={{
-          fontFamily: "var(--hk-mono)", fontSize: 10, color: "var(--hk-text)",
+          fontFamily: "var(--hk-mono)", fontSize: 12, color: "var(--hk-text)",
           flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>
           {signal.title}
@@ -772,8 +772,8 @@ function SignalRow({ signal }: { signal: RiskSignal }) {
           paddingTop: 8,
         }}>
           <p style={{
-            fontFamily: "var(--hk-mono)", fontSize: 10, color: "var(--hk-text-dim)",
-            lineHeight: 1.65, margin: "0 0 6px",
+            fontFamily: "var(--hk-mono)", fontSize: 12, color: "var(--hk-text-dim)",
+            lineHeight: 1.7, margin: "0 0 6px",
           }}>
             {signal.description}
           </p>

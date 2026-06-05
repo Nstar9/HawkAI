@@ -31,6 +31,15 @@
   --hk-sans:  var(--font-sans),  system-ui, -apple-system, sans-serif;
   --hk-serif: var(--font-serif), Georgia, serif;
 
+  /* ── Font size scale (increased for readability) ── */
+  --hk-text-xs:   11px;   /* was 9px  — chips, badges */
+  --hk-text-sm:   12px;   /* was 10px — labels, metadata */
+  --hk-text-base: 13px;   /* was 11px — body text */
+  --hk-text-md:   14px;   /* was 12px — table rows */
+  --hk-text-lg:   16px;   /* was 13px — emphasized text */
+  --hk-text-xl:   20px;   /* unchanged — large numbers */
+  --hk-text-2xl:  26px;   /* unchanged — entity names */
+
   --hk-topbar-h: 42px;
   --hk-status-h: 24px;
   --hk-nav-w:    228px;
@@ -43,6 +52,7 @@ html, body {
   margin: 0; padding: 0; height: 100%;
   background: #000;
   font-family: var(--hk-mono);
+  font-size: 13px;          /* base size up from implicit ~12px */
   color: var(--hk-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -51,8 +61,8 @@ html, body {
 
 .hk-label {
   font-family: var(--hk-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: var(--hk-text-sm);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--hk-text-dim);
 }
@@ -67,21 +77,21 @@ html, body {
 
 .hk-level {
   display: inline-block;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border: 1px solid currentColor;
   font-family: var(--hk-mono);
-  font-size: 9px;
+  font-size: var(--hk-text-xs);
   letter-spacing: 0.1em;
   font-weight: 700;
 }
 
 .hk-chip {
-  padding: 2px 6px;
+  padding: 2px 7px;
   background: var(--hk-bg);
   border: 1px solid var(--hk-rule);
   color: var(--hk-text-dim);
   font-family: var(--hk-mono);
-  font-size: 9px;
+  font-size: var(--hk-text-xs);
   letter-spacing: 0.08em;
 }
 
@@ -119,7 +129,7 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--hk-rule); border-radius: 2px; }
 
-/* cursor blink for query bar */
+/* cursor blink */
 @keyframes hk-cursor-blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }

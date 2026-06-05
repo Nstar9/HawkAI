@@ -1,7 +1,8 @@
 import json
+import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
@@ -27,11 +28,14 @@ async def health() -> dict[str, Any]:
         "service": "hawkai-api",
         "version": "1.0.0",
         "model": settings.gemini_model,
+        "synthesis_model": settings.synthesis_model,
         "search": "disabled" if settings.disable_google_search else "live",
     }
 
 
-# --- Investigations ---
+# ---------------------------------------------------------------------------
+# Investigations
+# ---------------------------------------------------------------------------
 
 
 @router.post("/investigations", response_model=Investigation, status_code=202)
@@ -66,7 +70,9 @@ async def stream_investigation(investigation_id: str) -> EventSourceResponse:
     return EventSourceResponse(event_generator())
 
 
-# --- Entities ---
+# ---------------------------------------------------------------------------
+# Entities
+# ---------------------------------------------------------------------------
 
 
 @router.get("/entities", response_model=list[Entity])
@@ -92,3 +98,46 @@ async def add_entity_note(entity_id: str, payload: NoteCreate) -> Entity:
     if entity is None:
         raise HTTPException(status_code=404, detail="Entity not found")
     return entity
+
+
+# ---------------------------------------------------------------------------
+# Watchlists — expose the internal watchlist patterns used in classification
+# ---------------------------------------------------------------------------
+
+
+@router.get("/watchlists")
+async def get_watchlists() -> list[dict[str, Any]]:
+    """Return the watchlist patterns used by the signal classification engine."""
+    from app.config import get_settings
+    path = get_settings().watchlist_seed_path
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Signals — aggregate risk signals across all investigations
+# ---------------------------------------------------------------------------
+
+
+@router.get("/signals")
+async def list_all_signals(limit: int = 200) -> list[dict[str, Any]]:
+    """Return all risk signals across all investigations, newest first."""
+    db = get_mongodb_service()
+    investigations = await db.list_investigations(50)
+    signals = []
+    for inv in investigations:
+        if inv.result and inv.result.signals:
+            for sig in inv.result.signals:
+                signals.append({
+                    **sig.model_dump(mode="json"),
+                    "entity_name": inv.entity_name,
+                    "investigation_id": inv.id,
+                    "investigation_status": inv.status.value,
+                })
+    # Sort by severity then confidence
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    signals.sort(key=lambda s: (sev_order.get(s.get("severity", "low"), 4), -s.get("confidence", 0)))
+    return signals[:limit]
