@@ -366,31 +366,30 @@ ADVERSE FINDINGS FROM RESEARCH
 CLASSIFIED RISK SIGNALS (sorted by severity)
 {chr(10).join(signal_lines) if signal_lines else '• No signals identified — entity appears clean.'}
 
-Write a professional compliance report. Return ONLY valid JSON:
+Write a professional compliance report. Return ONLY this exact JSON structure — every array item MUST be a plain string, never an object:
 {{
-  "executive_summary": "2-3 sentences. Lead with the single most significant risk finding (cite specific dollar amount, regulatory body, or date). Second sentence provides context. Third sentence states the overall compliance posture. For LOW risk entities: state clearly that no material adverse findings were identified and entity appears suitable for standard onboarding.",
-
+  "executive_summary": "2-3 sentences. Lead with the single most significant risk finding — cite specific dollar amount, regulatory body, and date. Second sentence provides context. Third sentence states the overall compliance posture. For LOW risk entities: state no material adverse findings and entity is suitable for standard onboarding.",
   "key_findings": [
-    "Finding 1 — FORMAT: '[Category] Specific fact with verifiable detail.' Example: '[SANCTIONS] Microsoft paid $3.3M to OFAC in April 2023 for 1,339 transactions totaling $12M in sales to SDN-listed entities — employees intentionally bypassed screening controls.' Write 5–7 findings of this quality. Each must cite at least one specific fact.",
-    "Finding 2 — same format",
-    "Finding 3 — same format"
+    "[SANCTIONS] Example: JPMorgan paid $88M to OFAC in January 2013 for 1,700 transactions with sanctioned entities — this is the correct plain string format.",
+    "[REGULATORY] Second finding as a plain string with specific facts.",
+    "[GOVERNANCE] Third finding as a plain string.",
+    "[FRAUD] Fourth finding as a plain string.",
+    "[REPUTATIONAL] Fifth finding as a plain string."
   ],
-
   "recommendations": [
-    "PRIMARY ACTION: One of — 'CLEAR FOR STANDARD ONBOARDING' / 'ENHANCED DUE DILIGENCE REQUIRED' / 'DECLINE — UNACCEPTABLE AML RISK' / 'ESCALATE TO MLRO'. Then explain specifically what due diligence is needed and why. Be decisive.",
-    "MONITORING: If onboarding is approved, state what transaction monitoring rules apply — thresholds, jurisdictions, counterparties to watch.",
-    "PERIODIC REVIEW: State review timeline and what triggers an earlier review."
+    "PRIMARY ACTION: ENHANCED DUE DILIGENCE REQUIRED — explain specifically what is needed and why. Be decisive. One plain string.",
+    "MONITORING: Specific transaction monitoring rules, dollar thresholds, jurisdictions to watch. One plain string.",
+    "PERIODIC REVIEW: Timeline and what triggers an earlier review. One plain string."
   ],
-
-  "analyst_confidence": 0.0_to_1.0_float
+  "analyst_confidence": 0.85
 }}
 
-RULES:
-- executive_summary: max 3 sentences, no vague language, leads with the strongest fact
-- key_findings: minimum 5 items, maximum 8 items, each must cite a specific verifiable detail
-- recommendations: exactly 3 items using the PRIMARY ACTION / MONITORING / PERIODIC REVIEW structure
-- analyst_confidence: 0.90+ if multiple corroborating signals with official sources; 0.65–0.89 if moderate evidence; below 0.65 if limited data
-- For LOW RISK entities (score < 22): key_findings should note POSITIVE indicators (regulated entity, clean record, transparent structure)
+CRITICAL RULES — violations cause the report to fail:
+- key_findings: MUST be an array of 5–8 plain strings. NEVER use {{"finding": "..."}} or any nested object format.
+- recommendations: MUST be an array of exactly 3 plain strings starting with PRIMARY ACTION / MONITORING / PERIODIC REVIEW.
+- analyst_confidence: MUST be a decimal number between 0.0 and 1.0, e.g. 0.87
+- executive_summary: max 3 sentences, leads with the strongest specific fact
+- For LOW RISK (score < 22): key_findings should note positive indicators (regulated, clean, transparent)
 - Never invent regulatory actions, dollar amounts, or case numbers not present in the signals above"""
 
     synthesis_response = await gemini_with_retry(
@@ -405,6 +404,29 @@ RULES:
     )
 
     synthesis = _parse_json(synthesis_response.text or "{}") or {}
+
+    # --- Normalize list fields: the model sometimes returns list-of-dicts
+    # instead of list-of-strings. Flatten to plain strings defensively. ---
+    def _flatten_list(items: Any, fallback_key: str = "text") -> list[str]:
+        """Ensure every element is a string."""
+        result = []
+        for item in (items or []):
+            if isinstance(item, str):
+                result.append(item)
+            elif isinstance(item, dict):
+                # Try common keys in order of likelihood
+                for k in (fallback_key, "finding", "description", "content",
+                          "action", "recommendation", "text", "value"):
+                    if k in item and isinstance(item[k], str):
+                        result.append(item[k])
+                        break
+                else:
+                    # Last resort: join all string values
+                    result.append(" ".join(str(v) for v in item.values() if v))
+        return result
+
+    key_findings = _flatten_list(synthesis.get("key_findings", []), "finding")
+    recommendations = _flatten_list(synthesis.get("recommendations", []), "action")
 
     # --- Update entity with final risk score ---
     await db.update_entity(
@@ -422,8 +444,8 @@ RULES:
             "executive_summary",
             f"{entity.name} investigation complete. Risk score: {risk_score}/100 ({risk_level.upper()}).",
         ),
-        key_findings=synthesis.get("key_findings", []),
-        recommendations=synthesis.get("recommendations", []),
+        key_findings=key_findings,
+        recommendations=recommendations,
         risk_breakdown=breakdown,
         analyst_confidence=float(synthesis.get("analyst_confidence", 0.75)),
         correlated_entities=[],
