@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { deleteInvestigation } from "@/lib/api";
 import { Label, Dot, Level, Chip } from "./atoms";
 import type { DossierRow, DossierFilter, RiskLevel, SignalChip, EntityKind } from "./types";
 import type { Investigation } from "@/lib/types";
@@ -71,18 +72,34 @@ export function invToDossierRow(inv: Investigation, idx: number): DossierRow & {
 
 // ── Component ──────────────────────────────────────────────
 
-const COLUMNS = ["", "ID", "TIME", "ENTITY", "TYPE", "JURIS", "RISK", "LEVEL", "SIGNALS", "CONF"] as const;
-const GRID = "16px 80px 60px 1fr 70px 60px 70px 70px 1.1fr 52px";
+const COLUMNS = ["", "ID", "TIME", "ENTITY", "TYPE", "JURIS", "RISK", "LEVEL", "SIGNALS", "CONF", ""] as const;
+const GRID = "16px 80px 60px 1fr 70px 60px 70px 70px 1.1fr 52px 28px";
 const FILTERS: readonly DossierFilter[] = ["ALL", "CRIT", "HIGH", "MED", "LOW"] as const;
 
 export interface DossierTableProps {
   investigations: Investigation[];
-  highlightId?: string; // currently running investigation ID
+  highlightId?: string;
+  onDelete?: (investigationId: string) => void;
 }
 
-export function DossierTable({ investigations, highlightId }: DossierTableProps) {
+export function DossierTable({ investigations, highlightId, onDelete }: DossierTableProps) {
   const [activeFilter, setActiveFilter] = useState<DossierFilter>("ALL");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
+
+  async function handleDelete(e: React.MouseEvent, invId: string, entityName: string) {
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${entityName}"? This cannot be undone.`)) return;
+    setDeletingId(invId);
+    try {
+      await deleteInvestigation(invId);
+      onDelete?.(invId);
+    } catch {
+      // ignore
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const allRows = investigations
     .filter(i => i.status === "completed" || i.status === "running")
@@ -210,6 +227,24 @@ export function DossierTable({ investigations, highlightId }: DossierTableProps)
               }}>
                 {r.confidence != null ? `${r.confidence}%` : "—"}
               </span>
+
+              <button
+                type="button"
+                onClick={(e) => handleDelete(e, r._invId, r.name)}
+                disabled={deletingId === r._invId}
+                className="hk-bare-btn"
+                title="Delete investigation"
+                style={{
+                  fontFamily: "var(--hk-mono)", fontSize: 12,
+                  color: "var(--hk-red)", opacity: deletingId === r._invId ? 0.5 : 0.35,
+                  padding: "2px 4px", borderRadius: 2,
+                  transition: "opacity 0.12s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = "1"; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = deletingId === r._invId ? "0.5" : "0.35"; }}
+              >
+                {deletingId === r._invId ? "…" : "✕"}
+              </button>
             </div>
           );
         })}

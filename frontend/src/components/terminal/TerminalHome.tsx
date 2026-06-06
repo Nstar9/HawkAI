@@ -14,6 +14,7 @@ import { Label }        from "./atoms";
 
 import {
   createInvestigation,
+  deleteInvestigation,
   getInvestigation,
   listInvestigations,
   streamInvestigation,
@@ -271,6 +272,13 @@ export function TerminalHome({ initialInvestigations, entityCount }: TerminalHom
     URL.revokeObjectURL(url);
   }
 
+  async function handleDeleteInvestigation(invId: string) {
+    try {
+      await deleteInvestigation(invId);
+      setInvestigations(prev => prev.filter(i => i.id !== invId));
+    } catch { /* ignore */ }
+  }
+
   // ── Render ─────────────────────────────────────────────────
   return (
     <div className="hk-shell">
@@ -301,7 +309,7 @@ export function TerminalHome({ initialInvestigations, entityCount }: TerminalHom
                 onRun={handleRun}
               />
               <Pipeline steps={pipelineSteps} status={pipelineStatus} />
-              <DossierTable investigations={investigations} highlightId={activeId ?? undefined} />
+              <DossierTable investigations={investigations} highlightId={activeId ?? undefined} onDelete={handleDeleteInvestigation} />
             </>
           )}
 
