@@ -1,14 +1,14 @@
 # HawkAI
 
-> **Autonomous KYC/AML Intelligence Terminal** — researches any company, person, or fund and produces a structured financial crime risk report in under 4 minutes, powered by Google ADK + Gemini + MongoDB Atlas.
+> **Autonomous KYC/AML Intelligence Terminal** — research any company, person, or fund and receive a structured financial crime risk report in under 4 minutes, powered by Google ADK · Gemini · MongoDB Atlas.
 
-**Live demo:** [hawk-ai-flax.vercel.app](https://hawk-ai-flax.vercel.app) · **API:** [hawkai-backend-pnkbbvfuoa-uc.a.run.app](https://hawkai-backend-pnkbbvfuoa-uc.a.run.app/api/v1/health)
+**Live demo:** [hawk-ai-flax.vercel.app](https://hawk-ai-flax.vercel.app) · **Backend health:** [hawkai-backend-pnkbbvfuoa-uc.a.run.app/api/v1/health](https://hawkai-backend-pnkbbvfuoa-uc.a.run.app/api/v1/health)
 
 ---
 
 ## The Problem
 
-Financial crime costs the global economy **$2 trillion+ every year**. Yet the tools to fight it are locked behind Bloomberg Terminal licenses that cost $24,000/year — inaccessible to 99% of compliance teams at community banks, fintech startups, and financial regulators.
+Financial crime costs the global economy **$2 trillion+ per year**. Yet the tools to fight it are locked behind Bloomberg Terminal licenses at $24,000/year — inaccessible to 99% of compliance teams at community banks, fintech startups, and financial regulators.
 
 A compliance officer manually screening a single counterparty spends **2–4 days and $100+** per entity. HawkAI does it autonomously in **under 4 minutes for fractions of a cent**.
 
@@ -18,47 +18,53 @@ A compliance officer manually screening a single counterparty spends **2–4 day
 
 Type a name. HawkAI does the rest.
 
-A multi-agent pipeline autonomously searches the web for compliance intelligence, extracts a structured entity profile, runs 768-dimensional vector similarity search to surface connected entities, classifies risk signals across 8 categories, and synthesizes a scored risk report — all streamed live to a Bloomberg Terminal-style UI.
+A multi-agent pipeline autonomously searches the web for compliance intelligence, extracts a structured entity profile, runs 768-dimensional vector similarity search to surface correlated entities, classifies risk signals across 8 categories, and synthesizes a scored risk report — all streamed live to a Bloomberg Terminal-style UI.
 
-**Investigators get:**
-- Risk score (0–100) with CRITICAL / HIGH / MEDIUM / LOW classification
-- 5–7 specific findings, each citing verifiable facts (dollar amounts, dates, regulatory bodies)
-- Compliance recommendations in PRIMARY ACTION / MONITORING / PERIODIC REVIEW structure
-- Analyst confidence score (0–100%)
-- Risk breakdown by category with visual bars
-- Entity correlation matrix using 768-dim vector embeddings
-- Live event feed showing every agent action in real-time
-- PDF export of any report with one click
+### Investigators get
 
-> ⚠️ **KYC/AML compliance screening only** — scores reflect regulatory enforcement history and adverse findings, not investment grade or creditworthiness.
+- **Risk score (0–100)** with CRITICAL / HIGH / MEDIUM / LOW classification
+- **Confidence score** (0–100%) reflecting source quality and coverage
+- **5–7 specific findings**, each citing verifiable facts (dollar amounts, dates, regulatory bodies)
+- **Compliance recommendations** in PRIMARY ACTION / MONITORING / PERIODIC REVIEW structure
+- **Risk breakdown by category** — GOVERNANCE · FRAUD · SANCTIONS · FINANCIAL · REGULATORY · LITIGATION · REPUTATION
+- **Entity Relationship Network** — force-directed graph showing risk correlations across all investigated entities, connected by shared signal categories
+- **Batch screening** — comma-separate multiple names to queue simultaneous investigations
+- **Watchlist alerts** — star any entity; get a live badge count when watched entities hit HIGH/CRITICAL risk
+- **Live event feed** showing every agent action, tool call, and pipeline step in real time
+- **PDF export** — full multi-page report with one click
+- **Light / dark mode** — persisted to localStorage
+- **Analyst notes** — add and store observations against any entity profile
+
+> ⚠️ **KYC/AML compliance screening only.** Scores reflect regulatory enforcement history and adverse findings, not investment grade or creditworthiness.
 
 ---
 
 ## Architecture
 
 ```
-                    ┌──────────────────────────────────────┐
-                    │    HawkAI Bloomberg Terminal UI       │
-                    │    Next.js 14 · TypeScript            │
-                    │    JetBrains Mono · amber palette     │
-                    └──────────────┬───────────────────────┘
-                                   │ POST + SSE streaming
-                    ┌──────────────▼───────────────────────┐
-                    │         FastAPI Backend               │
-                    │    /api/v1/* · SSE · Cloud Run        │
-                    └──────────────┬───────────────────────┘
+                    ┌──────────────────────────────────────────┐
+                    │      HawkAI Bloomberg Terminal UI         │
+                    │   Next.js 14 · TypeScript · App Router    │
+                    │   JetBrains Mono · amber-on-ink palette   │
+                    └──────────────┬───────────────────────────┘
+                                   │  REST + SSE streaming
+                    ┌──────────────▼───────────────────────────┐
+                    │           FastAPI Backend                  │
+                    │     /api/v1/* · SSE · Google Cloud Run     │
+                    │        min-instances=1 (no cold start)     │
+                    └──────────────┬───────────────────────────┘
                                    │
-                    ┌──────────────▼───────────────────────┐
-                    │       ScoutOrchestrator               │
-                    │   Google ADK SequentialAgent          │
-                    └──────────┬───────────────────────────┘
+                    ┌──────────────▼───────────────────────────┐
+                    │          ScoutOrchestrator                 │
+                    │      Google ADK SequentialAgent            │
+                    └──────────┬────────────────────────────────┘
                                │
-         ┌─────────────────────▼──┐  ┌──────────────────────────────────┐
-         │    ResearchAgent        │  │       IntelligenceAgent          │
-         │  gemini-3.5-flash       │  │       gemini-3.5-flash           │
-         │  google_search (live)   │  │  + gemini-2.5-pro for synthesis  │
-         │  2 targeted searches    │  │  5 custom async Python tools     │
-         └─────────────────────── ┘  └──────────────┬───────────────────┘
+         ┌─────────────────────▼──┐  ┌───────────────────────────────────┐
+         │     ResearchAgent       │  │        IntelligenceAgent           │
+         │   gemini-2.5-flash      │  │        gemini-2.5-flash            │
+         │   google_search (live)  │  │  + gemini-2.5-pro for synthesis    │
+         │   2 targeted searches   │  │  5 custom async Python tools       │
+         └────────────────────────┘  └──────────────┬────────────────────┘
                                                      │
                                   ┌──────────────────┤
                                   │  extract_and_store_entity
@@ -66,13 +72,14 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
                                   │  find_correlated_entities     → Motor async
                                   │  classify_and_store_signals   → gemini-2.5-pro
                                   │  synthesize_risk_report       → gemini-2.5-pro
-                                  └──────────────────┬──────────────────────────
+                                  └──────────────────┬──────────────────
                                                      │
-                    ┌────────────────────────────────▼──────────────────────────┐
-                    │                   MongoDB Atlas M0                        │
-                    │   investigations · entities · risk_signals                │
-                    │   Vector Search Index (768-dim cosine, gemini-embedding-001) │
-                    └────────────────────────────────────────────────────────────┘
+                    ┌────────────────────────────────▼──────────────────────┐
+                    │                   MongoDB Atlas M0                     │
+                    │   investigations · entities · risk_signals             │
+                    │   Vector Search Index (768-dim cosine)                 │
+                    │   gemini-embedding-001 embeddings                      │
+                    └────────────────────────────────────────────────────────┘
 ```
 
 ### Key Design Decisions
@@ -80,10 +87,12 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
 | Decision | Why |
 |---|---|
 | **SequentialAgent** | ADK constraint: `google_search` cannot share a session with database tools. Two agents, one pipeline. |
-| **Custom async tools** (not MCP Server) | `mongodb-mcp-server` spawns a stdio subprocess that reliably crashes in Cloud Run serverless (no guaranteed child process lifecycle). Our Motor async tools provide identical Atlas access with better reliability and zero subprocess overhead. |
-| **Tiered Gemini models** | `gemini-3.5-flash` for agent orchestration (fast, live search, tool calling); `gemini-2.5-pro` for signal classification + report synthesis (highest output quality). |
-| **Person disambiguation** | Optional `context` field (company, role, country, year) passed with person investigations to identify the correct individual among common names. |
-| **Evidence-weighted scoring** | 60% max-severity floor + 40% weighted signal average + breadth bonus. One CRITICAL signal guarantees a CRITICAL (75+) score. |
+| **Custom async tools** (not MCP Server) | `mongodb-mcp-server` spawns a stdio subprocess that crashes reliably in Cloud Run (no guaranteed child process lifecycle). Motor async tools provide identical Atlas access with zero subprocess overhead. |
+| **Tiered Gemini models** | `gemini-2.5-flash` for agent orchestration (fast, live search, tool calling); `gemini-2.5-pro` for signal classification + report synthesis (highest output quality). |
+| **Person disambiguation** | Optional `context` field (company, role, country, year) sent with person investigations to identify the right individual among common names. |
+| **Evidence-weighted scoring** | 60% max-severity floor + 40% weighted signal average + signal-breadth bonus. One CRITICAL signal guarantees a CRITICAL (75+) score. |
+| **Force-directed entity graph** | Pure JavaScript simulation (Coulomb repulsion + Hooke springs + center gravity), 250 synchronous iterations — no D3 dependency, stable layout before first render. |
+| **SSE streaming** | Every agent event (tool call, step, text, snapshot) is pushed to the frontend as it happens — the UI never waits on a response body. |
 
 ---
 
@@ -91,26 +100,45 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
 
 | Layer | Technology |
 |---|---|
-| Agent Framework | **Google ADK 2.0** |
-| Agent Model | **Gemini 3.5 Flash** (live Google Search + tool calling) |
-| Synthesis Model | **Gemini 2.5 Pro** (signal classification + report generation) |
+| Agent Framework | **Google ADK 2.0** (SequentialAgent) |
+| Agent Model | **Gemini 2.5 Flash** — live Google Search + tool calling |
+| Synthesis Model | **Gemini 2.5 Pro** — signal classification + report generation |
 | Embeddings | **gemini-embedding-001** (768-dim) |
 | Web Research | Google Search grounding (ADK built-in, live OSINT) |
-| Database | **MongoDB Atlas M0** |
+| Database | **MongoDB Atlas M0** (free tier) |
 | Vector Search | MongoDB Atlas `$vectorSearch` (cosine, 768-dim) |
-| Backend | **FastAPI** + asyncio + SSE streaming |
+| Backend | **FastAPI** + asyncio + Motor async driver + SSE |
 | Frontend | **Next.js 14** + TypeScript + App Router |
-| UI | Bloomberg Terminal — JetBrains Mono, amber-on-ink |
-| Deployment | **Google Cloud Run** · us-central1 |
+| UI | Bloomberg Terminal-style — JetBrains Mono, amber phosphor palette |
+| Deployment | **Google Cloud Run** (us-central1) + **Vercel** |
+
+---
+
+## Features In Depth
+
+### Entity Risk Report
+Every report includes an executive summary, key findings numbered with category tags (FRAUD · SANCTIONS · GOVERNANCE…), recommendations split by action type, and a risk breakdown sidebar with full category names and signal counts. Reports are exportable to PDF with one click.
+
+### Entity Relationship Network (Correlations tab)
+Force-directed SVG graph connecting every investigated entity. Nodes are sized by risk score, colored by risk level (CRITICAL → red, HIGH → orange, MEDIUM → amber, LOW → green). Edges represent shared risk signal categories. Hover any node for a score/level tooltip; click to open the full report. Edge labels show the shared signal types on hover.
+
+### Batch Screening
+Comma-separate names in the query field: `Binance, Tether, Circle`. A `⇶ BATCH · 3 ENTITIES` indicator appears. All investigations are created simultaneously and the pipeline streams the first one; the rest populate the dossier table as they complete in the background.
+
+### Watchlist Alerts
+Star (★) any row in the dossier table. If a watched entity completes with HIGH or CRITICAL risk, a red badge appears on the WATCHLISTS nav item and the Watchlists view shows an ACTIVE ALERTS section at the top with one-click cards to open each flagged report.
+
+### Live Pipeline
+Every pipeline step, tool call, and agent output is streamed in real time to the terminal feed and the live queue panel. Nothing is polled — pure SSE.
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
-- Google AI Studio API Key (paid tier, ~$5 sufficient) → [aistudio.google.com](https://aistudio.google.com/apikey)
-- MongoDB Atlas M0 (free) → [mongodb.com/atlas](https://mongodb.com/atlas)
-- Docker + Docker Compose, **or** Python 3.12+ / Node.js 22+
+- Google AI Studio API Key (paid tier) → [aistudio.google.com](https://aistudio.google.com/apikey)
+- MongoDB Atlas M0 cluster (free) → [mongodb.com/atlas](https://mongodb.com/atlas)
+- Docker + Docker Compose, **or** Python 3.12+ / Node 22+
 
 ### 1 — Clone & configure
 ```bash
@@ -122,7 +150,7 @@ Edit `backend/.env`:
 ```env
 GOOGLE_API_KEY=your-google-ai-studio-key
 MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/hawkai
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 SYNTHESIS_MODEL=gemini-2.5-pro
 ```
 
@@ -141,23 +169,23 @@ In Atlas UI → **Atlas Search** → **Create Index** → **JSON Editor**, colle
 ### 3 — Run
 ```bash
 docker-compose up --build
-# open http://localhost:3000
+# → http://localhost:3000
 ```
 
 ---
 
 ## Demo Investigations
 
-| Entity | Type | Score | Level |
-|---|---|---|---|
-| Sam Bankman-Fried | PERSON | 93 | CRITICAL |
-| JPMorgan Chase | COMPANY | 91 | CRITICAL |
-| Celsius Network | COMPANY | ~88 | CRITICAL |
-| FTX Ventures | FUND | ~85 | CRITICAL |
-| Meta Inc | COMPANY | 42 | MEDIUM |
-| Tesla Inc | COMPANY | 35 | MEDIUM |
-| BlackRock Inc | COMPANY | ~8 | LOW |
-| Berkshire Hathaway | COMPANY | ~5 | LOW |
+| Entity | Type | Score | Level | Notable Signals |
+|---|---|---|---|---|
+| FTX Ventures | FUND | 95 | CRITICAL | Wire fraud conviction, CFTC $12.7B consent order, Chapter 11 bankruptcy |
+| Sam Bankman-Fried | PERSON | 93 | CRITICAL | 7 criminal counts, 25-year sentence, customer fund misappropriation |
+| Celsius Network | COMPANY | 91 | CRITICAL | Bankruptcy, $4.7B customer losses, SEC/DOJ enforcement |
+| JPMorgan Chase | COMPANY | 83 | CRITICAL | $13B DOJ settlement, MBS fraud, multiple regulatory actions |
+| Binance | COMPANY | ~78 | HIGH | $4.3B DOJ/FinCEN settlement, BSA violations |
+| Meta Inc | COMPANY | ~42 | MEDIUM | FTC consent orders, Cambridge Analytica, privacy fines |
+| Tesla Inc | COMPANY | ~35 | MEDIUM | SEC settlements, Musk securities violations |
+| BlackRock Inc | COMPANY | ~8 | LOW | Clean — standard regulatory disclosures only |
 
 ---
 
@@ -165,28 +193,29 @@ docker-compose up --build
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/health` | Health — returns model config |
-| `POST` | `/api/v1/investigations` | Start investigation |
-| `GET` | `/api/v1/investigations` | List investigations |
-| `GET` | `/api/v1/investigations/{id}` | Get by ID |
-| `GET` | `/api/v1/investigations/{id}/stream` | **SSE** real-time events |
-| `DELETE` | `/api/v1/investigations/failed` | Clean up failures |
+| `GET` | `/api/v1/health` | Service health — returns model config |
+| `POST` | `/api/v1/investigations` | Start a new investigation |
+| `GET` | `/api/v1/investigations` | List all investigations |
+| `GET` | `/api/v1/investigations/{id}` | Get investigation by ID |
+| `DELETE` | `/api/v1/investigations/{id}` | Delete investigation + all its signals |
+| `GET` | `/api/v1/investigations/{id}/stream` | **SSE** real-time event stream |
+| `DELETE` | `/api/v1/investigations/failed` | Bulk-delete all failed investigations |
 | `GET` | `/api/v1/watchlists` | AML watchlist patterns |
-| `GET` | `/api/v1/signals` | All signals across investigations |
+| `GET` | `/api/v1/signals` | All risk signals across investigations |
 | `GET` | `/api/v1/entities` | Entity profiles |
-| `POST` | `/api/v1/entities/{id}/notes` | Add analyst note |
+| `POST` | `/api/v1/entities/{id}/notes` | Add analyst note to entity |
 
 ---
 
 ## Environment Variables
 
 ```env
-GOOGLE_API_KEY=           # Google AI Studio (paid tier)
-MONGODB_URI=              # Atlas connection string
-GEMINI_MODEL=gemini-3.5-flash
+GOOGLE_API_KEY=           # Google AI Studio key (paid tier required for Search grounding)
+MONGODB_URI=              # Atlas connection string (mongodb+srv://...)
+MONGODB_DATABASE=hawkai
+GEMINI_MODEL=gemini-2.5-flash
 SYNTHESIS_MODEL=gemini-2.5-pro
 EMBEDDING_MODEL=gemini-embedding-001
-MONGODB_DATABASE=hawkai
 DISABLE_GOOGLE_SEARCH=false
 ```
 
