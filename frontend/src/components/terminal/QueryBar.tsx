@@ -18,6 +18,9 @@ export interface QueryBarProps {
   onEntityTypeChange: (v: EntityType) => void;
   onContextChange: (v: string) => void;
   onRun: () => void;
+  isBatchMode?: boolean;
+  batchCount?: number;
+  batchProgress?: { done: number; total: number } | null;
 }
 
 export function QueryBar({
@@ -29,6 +32,9 @@ export function QueryBar({
   onEntityTypeChange,
   onContextChange,
   onRun,
+  isBatchMode = false,
+  batchCount = 0,
+  batchProgress = null,
 }: QueryBarProps) {
   function handleKeyDown(e: React.KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -44,8 +50,26 @@ export function QueryBar({
     <div style={{ padding: "20px 28px 0", position: "relative", zIndex: 2 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <Label tone="amber">&gt; QUERY</Label>
+        {isBatchMode && (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "3px 10px",
+            background: "rgba(244,185,66,0.1)", border: "1px solid var(--hk-amber-dim)",
+            borderRadius: 2, fontFamily: "var(--hk-mono)", fontSize: 10,
+            color: "var(--hk-amber)", letterSpacing: "0.1em",
+          }}>
+            ⇶ BATCH · {batchCount} ENTITIES
+            {batchProgress && (
+              <span style={{ color: "var(--hk-text-mute)", marginLeft: 4 }}>
+                {batchProgress.done}/{batchProgress.total}
+              </span>
+            )}
+          </span>
+        )}
         <span style={{ flex: 1, height: 1, background: "var(--hk-rule)" }} />
-        <Label tone="mute">type any company, person, or fund</Label>
+        <Label tone="mute">
+          {isBatchMode ? "separate names with commas" : "type any company, person, or fund"}
+        </Label>
       </div>
 
       {/* Main search input */}

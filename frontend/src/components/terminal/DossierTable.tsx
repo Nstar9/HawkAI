@@ -72,17 +72,19 @@ export function invToDossierRow(inv: Investigation, idx: number): DossierRow & {
 
 // ── Component ──────────────────────────────────────────────
 
-const COLUMNS = ["", "ID", "TIME", "ENTITY", "TYPE", "JURIS", "RISK", "LEVEL", "SIGNALS", "CONF", ""] as const;
-const GRID = "16px 80px 60px 1fr 70px 60px 70px 70px 1.1fr 52px 28px";
+const COLUMNS = ["", "ID", "TIME", "ENTITY", "TYPE", "JURIS", "RISK", "LEVEL", "SIGNALS", "CONF", "", ""] as const;
+const GRID = "16px 80px 60px 1fr 70px 60px 70px 70px 1.1fr 52px 24px 28px";
 const FILTERS: readonly DossierFilter[] = ["ALL", "CRIT", "HIGH", "MED", "LOW"] as const;
 
 export interface DossierTableProps {
   investigations: Investigation[];
   highlightId?: string;
   onDelete?: (investigationId: string) => void;
+  watchedIds?: Set<string>;
+  onToggleWatch?: (id: string) => void;
 }
 
-export function DossierTable({ investigations, highlightId, onDelete }: DossierTableProps) {
+export function DossierTable({ investigations, highlightId, onDelete, watchedIds, onToggleWatch }: DossierTableProps) {
   const [activeFilter, setActiveFilter] = useState<DossierFilter>("ALL");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
@@ -227,6 +229,25 @@ export function DossierTable({ investigations, highlightId, onDelete }: DossierT
               }}>
                 {r.confidence != null ? `${r.confidence}%` : "—"}
               </span>
+
+              {/* Watch toggle */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onToggleWatch?.(r._invId); }}
+                className="hk-bare-btn"
+                title={watchedIds?.has(r._invId) ? "Remove from watchlist" : "Add to watchlist"}
+                style={{
+                  fontFamily: "var(--hk-mono)", fontSize: 13,
+                  color: watchedIds?.has(r._invId) ? "var(--hk-amber)" : "var(--hk-text-mute)",
+                  opacity: watchedIds?.has(r._invId) ? 1 : 0.35,
+                  padding: "2px 3px", borderRadius: 2,
+                  transition: "opacity 0.12s, color 0.12s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = "1"; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = watchedIds?.has(r._invId) ? "1" : "0.35"; }}
+              >
+                {watchedIds?.has(r._invId) ? "★" : "☆"}
+              </button>
 
               <button
                 type="button"

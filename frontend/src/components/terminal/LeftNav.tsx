@@ -23,6 +23,7 @@ interface LeftNavProps {
   onSelectRecent: (inv: Investigation) => void;
   entityCount: number;
   entityPct?: number;
+  watchlistBadge?: number;
 }
 
 const NAV_ITEMS = [
@@ -42,6 +43,7 @@ export function LeftNav({
   onSelectRecent,
   entityCount,
   entityPct = 0.62,
+  watchlistBadge = 0,
 }: LeftNavProps) {
   const recentCompleted = investigations
     .filter(i => i.status === "completed")
@@ -85,6 +87,17 @@ export function LeftNav({
               <span style={{ flex: 1 }}>{n.label}</span>
               {count != null && (
                 <span style={{ color: "var(--hk-text-mute)", fontSize: 10 }}>{count}</span>
+              )}
+              {n.view === "watchlists" && watchlistBadge > 0 && (
+                <span style={{
+                  minWidth: 16, height: 16, borderRadius: 8,
+                  background: "var(--hk-red)", color: "#fff",
+                  fontFamily: "var(--hk-mono)", fontSize: 9, fontWeight: 700,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  padding: "0 4px",
+                }}>
+                  {watchlistBadge > 9 ? "9+" : watchlistBadge}
+                </span>
               )}
             </button>
           );

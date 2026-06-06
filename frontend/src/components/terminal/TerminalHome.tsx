@@ -8,6 +8,7 @@ import { LeftNav }      from "./LeftNav";
 import { QueryBar }     from "./QueryBar";
 import { Pipeline, PIPELINE_STEPS } from "./Pipeline";
 import { DossierTable } from "./DossierTable";
+import { EntityGraph }  from "./EntityGraph";
 import { RightRail }    from "./RightRail";
 import { StatusBar }    from "./StatusBar";
 import { Label }        from "./atoms";
@@ -99,6 +100,18 @@ export function TerminalHome({ initialInvestigations, entityCount }: TerminalHom
   const [signals,     setSignals]     = useState<SignalRow[]>([]);
   const [sideLoading, setSideLoading] = useState(false);
 
+  // Watchlist alert state (persisted in localStorage)
+  const [watchedIds, setWatchedIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set<string>();
+    try {
+      const saved = localStorage.getItem("hk-watched");
+      return new Set<string>(saved ? JSON.parse(saved) as string[] : []);
+    } catch { return new Set<string>(); }
+  });
+
+  // Batch screening progress
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+
   // Ticker
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -141,13 +154,79 @@ export function TerminalHome({ initialInvestigations, entityCount }: TerminalHom
     });
   }
 
-  // ── Start investigation ────────────────────────────────────
-  async function handleRun() {
-    if (!query.trim() || activeId) return;
-    if (closeSSERef.current) { closeSSERef.current(); closeSSERef.current = null; }
+  // ── Watchlist helpers ──────────────────────────────────────
+  function toggleWatch(invId: string) {
+    setWatchedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(invId)) next.delete(invId); else next.add(invId);
+      localStorage.setItem("hk-watched", JSON.stringify(Array.from(next)));
+      return next;
+    });
+  }
 
-    // Switch to query view if on another view
+  // ── Start investigation (single or batch) ──────────────────
+  async function handleRun() {
+    const names = query.split(",").map(n => n.trim()).filter(Boolean);
+    if (names.length === 0 || activeId) return;
+    if (closeSSERef.current) { closeSSERef.current(); closeSSERef.current = null; }
     setActiveView("query");
+
+    // Batch mode: create all investigations simultaneously, stream the first
+    if (names.length > 1) {
+      setBatchProgress({ done: 0, total: names.length });
+      const created: Investigation[] = [];
+      for (const name of names) {
+        try {
+          const inv = await createInvestigation({
+            entity_name: name,
+            entity_type: entityType,
+            context: context.trim() || undefined,
+          });
+          created.push(inv);
+          setInvestigations(prev => {
+            const without = prev.filter(i => i.id !== inv.id);
+            return [inv, ...without];
+          });
+          setBatchProgress(b => b ? { ...b, done: b.done + 1 } : null);
+        } catch { /* skip failed */ }
+      }
+      // Stream first investigation in the pipeline display
+      if (created.length > 0) {
+        const first = created[0];
+        setActiveId(first.id);
+        setActiveInv(first);
+        setPipelineIdx(0);
+        setStepTimes({ 0: Date.now() });
+        setLiveQueue([]);
+        pushQueue(nowTime(), "batch", `${created.length} investigations queued`, "var(--hk-amber)");
+        const close = streamInvestigation(first.id, (event) => {
+          if (event.event === "snapshot" || event.event === "investigation_completed") {
+            const data = event.data as unknown as Investigation;
+            setActiveInv(data);
+            setInvestigations(prev => { const w = prev.filter(i => i.id !== data.id); return [data, ...w]; });
+          }
+          if (event.event === "step") {
+            const d = event.data as { name?: string; status?: string };
+            if (d.name === "complete" && d.status === "completed") {
+              setPipelineIdx(PIPELINE_STEPS.length);
+              setPipelineStatus(`BATCH COMPLETE · ${created.length} ENTITIES`);
+              setBatchProgress(null);
+              refreshInvestigations();
+            }
+          }
+          if (event.event === "tool_call") {
+            const d = event.data as { tool?: string };
+            const stepIdx = TOOL_TO_STEP_IDX[d.tool ?? ""];
+            if (stepIdx !== undefined) { setPipelineIdx(stepIdx); setStepTimes(s => ({ ...s, [stepIdx]: Date.now() })); }
+          }
+          if (event.event === "done") { setActiveId(null); refreshInvestigations(); }
+        }, () => { setActiveId(null); });
+        closeSSERef.current = close;
+      }
+      return;
+    }
+
+    // Single investigation (original path)
 
     try {
       const inv = await createInvestigation({
@@ -276,8 +355,20 @@ export function TerminalHome({ initialInvestigations, entityCount }: TerminalHom
     try {
       await deleteInvestigation(invId);
       setInvestigations(prev => prev.filter(i => i.id !== invId));
+      setWatchedIds(prev => { const n = new Set(prev); n.delete(invId); localStorage.setItem("hk-watched", JSON.stringify(Array.from(n))); return n; });
     } catch { /* ignore */ }
   }
+
+  // Alert count: watched entities with CRITICAL or HIGH risk
+  const alertCount = investigations.filter(inv =>
+    watchedIds.has(inv.id) &&
+    inv.status === "completed" &&
+    (inv.result?.report?.risk_level === "critical" || inv.result?.report?.risk_level === "high")
+  ).length;
+
+  // Batch names (comma detection)
+  const batchNames = query.split(",").map(n => n.trim()).filter(Boolean);
+  const isBatchMode = batchNames.length > 1;
 
   // ── Render ─────────────────────────────────────────────────
   return (
@@ -291,6 +382,7 @@ export function TerminalHome({ initialInvestigations, entityCount }: TerminalHom
           onSelectRecent={(inv) => router.push(`/investigations/${inv.id}`)}
           entityCount={entityCount}
           entityPct={Math.min(entityCount / 50, 1)}
+          watchlistBadge={alertCount}
         />
 
         <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative", zIndex: 2 }}>
@@ -307,9 +399,18 @@ export function TerminalHome({ initialInvestigations, entityCount }: TerminalHom
                 onEntityTypeChange={(t) => { setEntityType(t); setContext(""); }}
                 onContextChange={setContext}
                 onRun={handleRun}
+                isBatchMode={isBatchMode}
+                batchCount={batchNames.length}
+                batchProgress={batchProgress}
               />
               <Pipeline steps={pipelineSteps} status={pipelineStatus} />
-              <DossierTable investigations={investigations} highlightId={activeId ?? undefined} onDelete={handleDeleteInvestigation} />
+              <DossierTable
+                investigations={investigations}
+                highlightId={activeId ?? undefined}
+                onDelete={handleDeleteInvestigation}
+                watchedIds={watchedIds}
+                onToggleWatch={toggleWatch}
+              />
             </>
           )}
 
@@ -320,12 +421,16 @@ export function TerminalHome({ initialInvestigations, entityCount }: TerminalHom
 
           {/* ── WATCHLISTS ── */}
           {activeView === "watchlists" && (
-            <WatchlistsView watchlists={watchlists} loading={sideLoading} />
+            <WatchlistsView
+              watchlists={watchlists}
+              loading={sideLoading}
+              watchedInvestigations={investigations.filter(i => watchedIds.has(i.id))}
+            />
           )}
 
-          {/* ── CORRELATIONS ── */}
+          {/* ── CORRELATIONS — Entity Network Graph ── */}
           {activeView === "correlations" && (
-            <CorrelationsView investigations={investigations} signals={signals} />
+            <CorrelationsView investigations={investigations} />
           )}
 
           {/* ── EXPORTS ── */}
@@ -429,15 +534,78 @@ function SignalsLibraryView({ signals, loading }: { signals: SignalRow[]; loadin
 // ── WATCHLISTS VIEW ──
 // ============================================================
 
-function WatchlistsView({ watchlists, loading }: { watchlists: WatchlistPattern[]; loading: boolean }) {
+function WatchlistsView({ watchlists, loading, watchedInvestigations }: {
+  watchlists: WatchlistPattern[];
+  loading: boolean;
+  watchedInvestigations: Investigation[];
+}) {
   const sevColor = (s: string) =>
     s === "critical" ? "var(--hk-red)"
     : s === "high" ? "var(--hk-red)"
     : s === "medium" ? "var(--hk-amber)"
     : "var(--hk-green)";
 
+  const alerts = watchedInvestigations.filter(
+    i => i.status === "completed" && (i.result?.report?.risk_level === "critical" || i.result?.report?.risk_level === "high")
+  );
+  const router = useRouter();
+
   return (
-    <div style={{ padding: "20px 28px", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div style={{ padding: "20px 28px", flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
+
+      {/* Active alerts section */}
+      {alerts.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--hk-red)", boxShadow: "0 0 6px var(--hk-red)" }} />
+            <Label tone="amber">ACTIVE ALERTS · {alerts.length} ENTITIES REQUIRE ATTENTION</Label>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {alerts.map(inv => {
+              const score = inv.result?.report?.overall_risk_score ?? 0;
+              const level = inv.result?.report?.risk_level ?? "low";
+              const color = sevColor(level);
+              return (
+                <button key={inv.id} type="button" onClick={() => router.push(`/investigations/${inv.id}`)}
+                  className="hk-bare-btn" style={{
+                    display: "flex", alignItems: "center", gap: 14,
+                    padding: "12px 16px", borderRadius: 3, textAlign: "left",
+                    background: `${color}0d`, border: `1px solid ${color}44`,
+                    cursor: "pointer",
+                  }}>
+                  <span style={{ fontFamily: "var(--hk-mono)", fontSize: 22, fontWeight: 700, color, minWidth: 40 }}>
+                    {Math.round(score)}
+                  </span>
+                  <div>
+                    <div style={{ fontFamily: "var(--hk-mono)", fontSize: 13, fontWeight: 700, color: "var(--hk-text)", marginBottom: 3 }}>
+                      {inv.entity_name}
+                    </div>
+                    <div style={{ fontFamily: "var(--hk-mono)", fontSize: 10, color, letterSpacing: "0.1em" }}>
+                      {level.toUpperCase()} RISK · {inv.entity_type.toUpperCase()} · {inv.result?.signals?.length ?? 0} SIGNALS
+                    </div>
+                  </div>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontFamily: "var(--hk-mono)", fontSize: 11, color: "var(--hk-amber)" }}>
+                    VIEW REPORT →
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ height: 1, background: "var(--hk-rule)", margin: "18px 0" }} />
+        </div>
+      )}
+
+      {watchedInvestigations.length > 0 && alerts.length === 0 && (
+        <div style={{
+          marginBottom: 16, padding: "10px 14px",
+          background: "rgba(92,255,163,0.04)", border: "1px solid rgba(92,255,163,0.15)", borderRadius: 3,
+          fontFamily: "var(--hk-mono)", fontSize: 12, color: "var(--hk-green)",
+        }}>
+          ✓ ALL {watchedInvestigations.length} WATCHED ENTITIES WITHIN ACCEPTABLE RISK
+        </div>
+      )}
+
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <Label tone="amber">&gt; WATCHLIST PATTERNS · {watchlists.length} ACTIVE</Label>
         <span style={{ flex: 1, height: 1, background: "var(--hk-rule)" }} />
@@ -504,97 +672,18 @@ function WatchlistsView({ watchlists, loading }: { watchlists: WatchlistPattern[
 // ── CORRELATIONS VIEW ──
 // ============================================================
 
-function CorrelationsView({ investigations, signals }: { investigations: Investigation[]; signals: SignalRow[] }) {
+function CorrelationsView({ investigations }: { investigations: Investigation[] }) {
   const completed = investigations.filter(i => i.status === "completed" && i.result?.report);
-
-  const sevColor = (s: string) =>
-    s === "critical" || s === "high" ? "var(--hk-red)"
-    : s === "medium" ? "var(--hk-amber)"
-    : "var(--hk-green)";
-
-  // Build entity risk matrix from completed investigations
-  const entities = completed.map(inv => ({
-    name: inv.entity_name,
-    type: inv.entity_type,
-    score: inv.result!.report!.overall_risk_score,
-    level: inv.result!.report!.risk_level,
-    signals: inv.result?.signals?.length ?? 0,
-    id: inv.id,
-    breakdown: inv.result?.report?.risk_breakdown ?? {},
-  })).sort((a, b) => b.score - a.score);
-
   return (
-    <div style={{ padding: "20px 28px", flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <Label tone="amber">&gt; ENTITY CORRELATION MATRIX · {entities.length} ENTITIES</Label>
+    <div style={{ padding: "16px 28px 0", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <Label tone="amber">&gt; ENTITY RISK NETWORK · {completed.length} ENTITIES</Label>
         <span style={{ flex: 1, height: 1, background: "var(--hk-rule)" }} />
-      </div>
-
-      <div style={{
-        marginBottom: 14, padding: "12px 16px",
-        background: "rgba(126,182,255,0.04)", border: "1px solid rgba(126,182,255,0.15)", borderRadius: 3,
-      }}>
-        <span style={{ fontFamily: "var(--hk-mono)", fontSize: 12, color: "var(--hk-text-dim)" }}>
-          Entities are connected via 768-dimensional vector embeddings (gemini-embedding-001).
-          Entities with similar risk profiles, jurisdictions, and adverse patterns cluster together in vector space.
+        <span style={{ fontFamily: "var(--hk-mono)", fontSize: 10, color: "var(--hk-text-mute)" }}>
+          Edges = shared risk signal categories · Node size = risk score · Click any node to open report
         </span>
       </div>
-
-      {entities.length === 0 ? (
-        <div style={{ padding: 40, textAlign: "center", fontFamily: "var(--hk-mono)", fontSize: 12, color: "var(--hk-text-mute)" }}>
-          NO ENTITIES — RUN INVESTIGATIONS TO BUILD THE CORRELATION MATRIX
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {entities.map((e, i) => {
-            const barW = `${Math.min(e.score, 100)}%`;
-            const color = sevColor(e.level);
-            return (
-              <div key={e.id} style={{
-                padding: "14px 16px", background: "var(--hk-surface)",
-                border: "1px solid var(--hk-rule)", borderRadius: 3,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                  <span style={{
-                    fontFamily: "var(--hk-mono)", fontWeight: 700, fontSize: 14, color: "var(--hk-text)",
-                  }}>{e.name}</span>
-                  <span style={{ fontFamily: "var(--hk-mono)", fontSize: 11, color: "var(--hk-text-mute)" }}>
-                    {e.type.toUpperCase()}
-                  </span>
-                  <span style={{ flex: 1 }} />
-                  <span style={{
-                    fontFamily: "var(--hk-mono)", fontSize: 22, fontWeight: 700, color,
-                  }}>{Math.round(e.score)}</span>
-                  <span style={{
-                    fontFamily: "var(--hk-mono)", fontSize: 11, fontWeight: 700, color,
-                    padding: "2px 8px", border: `1px solid ${color}`, borderRadius: 2,
-                  }}>{e.level.toUpperCase()}</span>
-                  <span style={{ fontFamily: "var(--hk-mono)", fontSize: 12, color: "var(--hk-text-mute)" }}>
-                    {e.signals} signals
-                  </span>
-                </div>
-                <div style={{ height: 3, background: "var(--hk-bg)", borderRadius: 2, marginBottom: 8 }}>
-                  <div style={{ height: "100%", width: barW, background: color, borderRadius: 2, opacity: 0.8 }} />
-                </div>
-                {Object.keys(e.breakdown).length > 0 && (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {Object.entries(e.breakdown).map(([cat, data]: [string, { count: number; max_severity: string }]) => (
-                      <span key={cat} style={{
-                        fontFamily: "var(--hk-mono)", fontSize: 11,
-                        color: sevColor(data.max_severity), padding: "1px 7px",
-                        border: `1px solid ${sevColor(data.max_severity)}`, borderRadius: 2,
-                        opacity: 0.8,
-                      }}>
-                        {cat.slice(0, 4).toUpperCase()}·{data.count}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <EntityGraph investigations={investigations} />
     </div>
   );
 }
