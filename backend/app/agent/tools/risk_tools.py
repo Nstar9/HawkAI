@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _SEVERITY_BASE: dict[str, float] = {
-    "critical": 88.0,
-    "high": 62.0,
-    "medium": 36.0,
-    "low": 12.0,
+    "critical": 90.0,
+    "high": 58.0,
+    "medium": 30.0,
+    "low": 10.0,
 }
 
 # Signal type → risk weight (1.0 = most severe for compliance purposes)
@@ -85,17 +85,18 @@ def _calculate_risk_score(signals: list) -> float:
     avg = (total / weight_sum) if weight_sum > 0 else 0.0
 
     # Breadth bonus: more unique signal categories = systemic risk
+    # Capped lower so routine regulatory diversity at large firms doesn't push LOW→CRITICAL
     unique_types = len({s.signal_type.value for s in signals})
-    breadth_bonus = min(unique_types * 2.5, 12.0)
+    breadth_bonus = min(unique_types * 1.5, 8.0)
 
     score = 0.60 * max_base + 0.40 * avg + breadth_bonus
     return round(min(100.0, max(1.0, score)), 1)
 
 
 def _score_to_level(score: float) -> str:
-    if score >= 75:
+    if score >= 80:    # Raised from 75 — CRITICAL requires strong evidence
         return "critical"
-    if score >= 50:
+    if score >= 52:    # Raised from 50
         return "high"
     if score >= 22:
         return "medium"
@@ -161,7 +162,7 @@ async def classify_and_store_signals(
     entity_name = entity.name if entity else "Unknown entity"
 
     classification_prompt = f"""You are a senior AML/KYC compliance analyst at a tier-1 financial institution.
-Classify ALL financial crime risk signals for this entity from the research provided.
+Classify financial crime risk signals for this entity from the research provided.
 
 ENTITY: {entity_name}
 
@@ -177,15 +178,27 @@ SIGNAL CATEGORIES (classify into ALL that apply):
 • regulatory — SEC, CFTC, FCA, FINRA, OCC, ESMA enforcement, fines, license issues
 • governance — undisclosed beneficial ownership, PEP connections, opaque structures
 • financial — bankruptcy, insolvency, material financial distress, SPAC/accounting issues
-• litigation — active significant lawsuits with financial exposure >$1M
+• litigation — active significant lawsuits with financial exposure >$100M
 • reputational — confirmed adverse media, bribery allegations, misconduct investigations
 • other — anything material that doesn't fit above categories
 
-SEVERITY CALIBRATION (be precise):
-• critical — confirmed sanctions match OR convicted fraud OR criminal indictment
-• high — regulatory enforcement with >$1M fine OR credible fraud allegations OR active SDN investigation
-• medium — regulatory inquiry <$1M OR civil lawsuit OR adverse media with named sources
-• low — minor regulatory notice OR old resolved issue OR unconfirmed allegation
+SEVERITY CALIBRATION — be strict and proportionate:
+• critical — ONLY: (1) confirmed active OFAC/EU/UN sanctions match, (2) criminal conviction with prison sentence, (3) active DOJ/SFO criminal indictment, (4) confirmed Ponzi scheme or total collapse with investor losses
+• high — SEC/regulatory enforcement with substantial fine relative to entity size AND evidence of intentional misconduct OR credible fraud allegations in active regulatory investigation OR bankruptcy with suspected fraud
+• medium — regulatory inquiry or consent order without admitted wrongdoing OR civil lawsuit OR historical enforcement action resolved >3 years ago OR adverse media from credible named sources
+• low — minor regulatory notice OR standard compliance requirements OR old resolved matter (>10 years) OR unconfirmed allegation
+
+PROPORTIONALITY IS CRITICAL — apply these rules:
+• Large regulated institutions (major banks, brokers, asset managers with >$100B AUM or >$10B assets) face routine regulatory oversight — do NOT rate standard compliance matters as HIGH or CRITICAL
+• A fine that is <0.1% of assets under management is routine for large institutions — rate it MEDIUM at most
+• Normal shareholder litigation, SEC comment letters, and routine FINRA examinations are LOW signals at major regulated entities
+• Only escalate to HIGH/CRITICAL when there is CONFIRMED intentional misconduct, criminal activity, or sanctions violation
+
+DO NOT classify as HIGH or CRITICAL:
+• Routine SEC/FINRA/regulatory oversight filings for large institutions
+• Industry-standard compliance requirements
+• Shareholder class actions settled without admission of wrongdoing
+• Historical resolved issues with no recent recurrence
 
 CONFIDENCE GUIDE:
 • 0.90–1.00 — confirmed by official regulatory/court record or company disclosure
@@ -193,9 +206,8 @@ CONFIDENCE GUIDE:
 • 0.50–0.69 — reported by single source or lacks key specifics
 • below 0.50 — allegation only, no corroboration — OMIT these
 
-Return ONLY a valid JSON array. Include every signal that meets the 0.50+ confidence threshold.
-Deduplicate — one signal per distinct incident (do not list the same regulatory action twice).
-If no qualifying signals found, return [].
+Return ONLY a valid JSON array. Be selective — only include genuine risk signals, not normal business operations.
+Deduplicate — one signal per distinct incident. If no qualifying signals found, return [].
 
 [
   {{
