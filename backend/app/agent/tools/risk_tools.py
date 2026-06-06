@@ -31,15 +31,30 @@ _SEVERITY_BASE: dict[str, float] = {
 
 # Signal type → risk weight (1.0 = most severe for compliance purposes)
 _TYPE_WEIGHTS: dict[str, float] = {
-    "sanctions": 1.00,  # OFAC SDN / EU / UN matches — must-block
-    "fraud": 0.95,      # Confirmed or alleged financial fraud
-    "regulatory": 0.85, # SEC/FCA/FINRA enforcement actions
-    "governance": 0.75, # Opaque ownership, PEPs, beneficial owner issues
-    "financial": 0.70,  # Bankruptcy, insolvency, material financial distress
-    "litigation": 0.65, # Active or pending significant lawsuits
-    "reputational": 0.55,  # Adverse media, controversy
+    "sanctions": 1.00,
+    "fraud": 0.95,
+    "regulatory": 0.85,
+    "governance": 0.75,
+    "financial": 0.70,
+    "litigation": 0.65,
+    "reputational": 0.55,
     "other": 0.45,
 }
+
+# Hard ceiling on severity by signal type.
+# CRITICAL is reserved exclusively for confirmed fraud or active sanctions.
+# Everything else — no matter what Gemini returns — is capped here in Python.
+_MAX_SEVERITY_BY_TYPE: dict[str, str] = {
+    "sanctions":    "critical",  # Active OFAC/UN/EU listing
+    "fraud":        "critical",  # Confirmed criminal fraud / conviction
+    "financial":    "high",      # Bankruptcy / insolvency
+    "regulatory":   "high",      # Enforcement action (fine, consent order)
+    "governance":   "medium",    # Opaque ownership, PEP links
+    "litigation":   "medium",    # Civil lawsuits
+    "reputational": "medium",    # Adverse media
+    "other":        "medium",
+}
+_SEV_ORDER = ["low", "medium", "high", "critical"]
 
 
 def _gemini_client():
@@ -66,7 +81,10 @@ def _calculate_risk_score(signals: list) -> float:
       - Maximum severity signal sets a floor on the final score.
       - All signals contribute via an evidence-weighted average.
       - Final score blends floor (60%) + average (40%) + breadth bonus.
-      - Ensures one CRITICAL signal always produces a CRITICAL final score.
+      - Hard ceiling: entities with no confirmed fraud or sanctions signals
+        are capped at MEDIUM tier regardless of regulatory signal volume.
+        This prevents routine compliance oversight from inflating large
+        regulated institutions into CRITICAL territory.
     """
     if not signals:
         return 3.0
@@ -85,18 +103,34 @@ def _calculate_risk_score(signals: list) -> float:
     avg = (total / weight_sum) if weight_sum > 0 else 0.0
 
     # Breadth bonus: more unique signal categories = systemic risk
-    # Capped lower so routine regulatory diversity at large firms doesn't push LOW→CRITICAL
     unique_types = len({s.signal_type.value for s in signals})
     breadth_bonus = min(unique_types * 1.5, 8.0)
 
     score = 0.60 * max_base + 0.40 * avg + breadth_bonus
+
+    # ── Hard score ceiling based on signal type profile ───────────────────────
+    # CRITICAL risk requires confirmed fraud or active sanctions exposure.
+    # Regulatory/governance signals alone (however numerous) reflect oversight,
+    # not criminal exposure — cap them to MEDIUM at most (< 52 HIGH threshold).
+    has_fraud_or_sanctions = any(
+        s.signal_type.value in ("fraud", "sanctions") for s in signals
+    )
+    if not has_fraud_or_sanctions:
+        has_any_high = any(s.severity.value == "high" for s in signals)
+        if has_any_high:
+            # e.g. major SEC enforcement but no criminal fraud → MEDIUM
+            score = min(score, 48.0)
+        else:
+            # All medium/low regulatory/governance → low-MEDIUM
+            score = min(score, 28.0)
+
     return round(min(100.0, max(1.0, score)), 1)
 
 
 def _score_to_level(score: float) -> str:
-    if score >= 80:    # Raised from 75 — CRITICAL requires strong evidence
+    if score >= 83:    # CRITICAL: confirmed fraud / active sanctions only
         return "critical"
-    if score >= 52:    # Raised from 50
+    if score >= 52:
         return "high"
     if score >= 22:
         return "medium"
@@ -160,11 +194,13 @@ async def classify_and_store_signals(
 
     entity = await db.get_entity(entity_id)
     entity_name = entity.name if entity else "Unknown entity"
+    entity_summary = (entity.summary or "")[:400] if entity else ""
 
     classification_prompt = f"""You are a senior AML/KYC compliance analyst at a tier-1 financial institution.
 Classify financial crime risk signals for this entity from the research provided.
 
 ENTITY: {entity_name}
+ENTITY PROFILE: {entity_summary}
 
 RESEARCH BRIEF:
 {research_brief[:7000]}
@@ -250,6 +286,21 @@ Deduplicate — one signal per distinct incident. If no qualifying signals found
 
     # Filter out low-confidence signals before persisting
     raw_signals = [s for s in raw_signals if float(s.get("confidence", 0)) >= 0.50]
+
+    # ── Apply severity caps by signal type (programmatic guardrail) ──────────
+    # Gemini sometimes over-classifies routine matters as CRITICAL/HIGH.
+    # These caps enforce our severity taxonomy regardless of model output.
+    # CRITICAL severity is only valid for confirmed fraud or active sanctions.
+    for item in raw_signals:
+        stype = item.get("signal_type", "other")
+        sev   = item.get("severity", "medium")
+        max_ok = _MAX_SEVERITY_BY_TYPE.get(stype, "medium")
+        if _SEV_ORDER.index(sev) > _SEV_ORDER.index(max_ok):
+            logger.info(
+                "Severity cap: %s signal %s → %s for entity '%s'",
+                stype, sev, max_ok, entity_name,
+            )
+            item["severity"] = max_ok
 
     created: list[dict[str, Any]] = []
     for item in raw_signals:
