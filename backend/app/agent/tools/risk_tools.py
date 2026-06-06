@@ -132,7 +132,7 @@ def _calculate_risk_score(signals: list) -> float:
 
 
 def _score_to_level(score: float) -> str:
-    if score >= 83:    # CRITICAL: confirmed fraud / active sanctions only
+    if score >= 80:    # CRITICAL: confirmed fraud / active sanctions (ceiling prevents false positives)
         return "critical"
     if score >= 52:
         return "high"
@@ -212,15 +212,24 @@ RESEARCH BRIEF:
 ADVERSE FINDINGS TO PRIORITISE:
 {adverse_findings[:2000] if adverse_findings else "See research brief."}
 
+SIGNAL TYPE RULES — apply these first, before choosing a category:
+► Criminal convictions, guilty pleas, criminal indictments → MUST use "fraud" type. Never classify a DOJ/SFO criminal conviction as "other".
+► Wire fraud, securities fraud, money laundering, Ponzi schemes, embezzlement → "fraud" type.
+► Active OFAC/EU/UN/HMT sanctions designations → MUST use "sanctions" type. Never classify a confirmed sanctions designation as "other".
+► Facilitating transactions with sanctioned countries/entities → "sanctions" type.
+► SEC/CFTC/FCA/DOJ civil enforcement (fines, consent orders, deferred prosecution) → "regulatory" type.
+► Bribery, FCPA violations, corruption → "fraud" type.
+► Reserve "other" ONLY for genuine miscellaneous factors with no clear category match.
+
 SIGNAL CATEGORIES (classify into ALL that apply):
-• sanctions — OFAC SDN, EU/UN/HMT/OFSI lists, export controls violations
-• fraud — Ponzi, market manipulation, accounting fraud, wire fraud, embezzlement
+• sanctions — OFAC SDN, EU/UN/HMT/OFSI lists, confirmed sanctions violations
+• fraud — Ponzi, market manipulation, accounting fraud, wire fraud, embezzlement, criminal conviction
 • regulatory — SEC, CFTC, FCA, FINRA, OCC, ESMA enforcement, fines, license issues
 • governance — undisclosed beneficial ownership, PEP connections, opaque structures
 • financial — bankruptcy, insolvency, material financial distress, SPAC/accounting issues
 • litigation — active significant lawsuits with financial exposure >$100M
 • reputational — confirmed adverse media, bribery allegations, misconduct investigations
-• other — anything material that doesn't fit above categories
+• other — genuine miscellaneous risk that does not fit any category above
 
 SEVERITY CALIBRATION — be strict and proportionate:
 • critical — ONLY: (1) confirmed active OFAC/EU/UN sanctions match, (2) criminal conviction with prison sentence, (3) active DOJ/SFO criminal indictment, (4) confirmed Ponzi scheme or total collapse with investor losses
