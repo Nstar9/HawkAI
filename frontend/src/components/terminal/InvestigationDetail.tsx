@@ -19,103 +19,79 @@ const TOOL_TO_STEP_IDX: Record<string, number> = {
   "synthesize_risk_report":       5,
 };
 
-// ── Risk gauge SVG — 270° speedometer arc ─────────────────────
+// ── Risk gauge SVG — 270° arc, no glow, Bloomberg-clean ────────
 function RiskGauge({ score, level }: { score: number; level: string }) {
-  const cx = 60, cy = 58, r = 44;
+  const cx = 60, cy = 56, r = 44;
+
+  // Muted, professional palette — not neon
   const color =
-    level === "critical" ? "#ff4455" :
-    level === "high"     ? "#ff7a42" :
-    level === "medium"   ? "#f4b942" :
-    "#5cffa3";
+    level === "critical" ? "#d93648" :
+    level === "high"     ? "#d4622a" :
+    level === "medium"   ? "#c9922a" :
+    "#2e9e62";
 
-  // 270° arc: starts bottom-left (rotate 135°), gap at bottom
-  const circ       = 2 * Math.PI * r;
-  const arcLength  = circ * 0.75;                          // 270° = 75% of circle
-  const scoreDash  = arcLength * Math.min(score / 100, 1); // filled portion
+  // 270° arc: rotate(135°) puts the gap at the bottom centre
+  const circ      = 2 * Math.PI * r;
+  const arcLength = circ * 0.75;
+  const scoreDash = arcLength * Math.min(score / 100, 1);
 
-  // Tick marks at 0%, 25%, 50%, 75%, 100% of the arc
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => {
-    const angle = (135 + t * 270) * (Math.PI / 180); // degrees → radians
-    const inner = r - 6, outer = r + 1;
-    return {
-      x1: cx + Math.cos(angle) * inner,
-      y1: cy + Math.sin(angle) * inner,
-      x2: cx + Math.cos(angle) * outer,
-      y2: cy + Math.sin(angle) * outer,
-    };
-  });
-
-  const filterId = `hk-gauge-glow-${level}`;
+  // Quarter tick marks (25 / 50 / 75) — just small dashes on the outer edge
+  const tickAngles = [0.25, 0.5, 0.75].map(t => (135 + t * 270) * (Math.PI / 180));
 
   return (
-    <svg viewBox="0 0 120 118" width={130} height={126} aria-label={`Risk ${Math.round(score)}`}>
-      <defs>
-        <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
-          {/* Outer soft bloom */}
-          <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
-          {/* Tight inner glow */}
-          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur2" />
-          <feMerge>
-            <feMergeNode in="blur1" />
-            <feMergeNode in="blur2" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
+    <svg viewBox="0 0 120 116" width={128} height={124} aria-label={`Risk ${Math.round(score)}`}>
 
-      {/* Ambient center fill */}
-      <circle cx={cx} cy={cy} r={r - 8} fill={`${color}09`} />
-
-      {/* Background track — 270° */}
+      {/* Outer background track — dim but clear */}
       <circle cx={cx} cy={cy} r={r}
         fill="none"
-        stroke="rgba(255,255,255,0.06)"
-        strokeWidth={8}
+        stroke="rgba(255,255,255,0.09)"
+        strokeWidth={6}
         strokeDasharray={`${arcLength} 999`}
         strokeLinecap="butt"
         transform={`rotate(135 ${cx} ${cy})`}
       />
 
-      {/* Tick marks */}
-      {ticks.map((t, i) => (
-        <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
-          stroke="rgba(255,255,255,0.12)" strokeWidth={1}
+      {/* Quarter tick marks on the rim */}
+      {tickAngles.map((a, i) => (
+        <line key={i}
+          x1={cx + Math.cos(a) * (r - 4)} y1={cy + Math.sin(a) * (r - 4)}
+          x2={cx + Math.cos(a) * (r + 3)} y2={cy + Math.sin(a) * (r + 3)}
+          stroke="rgba(255,255,255,0.18)" strokeWidth={1.5}
         />
       ))}
 
-      {/* Progress arc — glowing */}
+      {/* Score arc — clean stroke, no filter */}
       <circle cx={cx} cy={cy} r={r}
         fill="none"
         stroke={color}
-        strokeWidth={8}
+        strokeWidth={6}
         strokeDasharray={`${scoreDash} 999`}
         strokeLinecap="round"
         transform={`rotate(135 ${cx} ${cy})`}
-        filter={`url(#${filterId})`}
         style={{ transition: "stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1)" }}
       />
 
-      {/* Thin inner accent ring */}
-      <circle cx={cx} cy={cy} r={r - 14}
-        fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={1}
+      {/* Inner separator ring */}
+      <circle cx={cx} cy={cy} r={r - 12}
+        fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={1}
       />
 
-      {/* Score number — hero element */}
-      <text x={cx} y={cy + 14} textAnchor="middle"
-        fill="#eee8d5" fontFamily="var(--hk-mono)" fontSize={36} fontWeight={900}
-        letterSpacing="-1.5">
+      {/* Score number */}
+      <text x={cx} y={cy + 13} textAnchor="middle"
+        fill="#e9e2d0" fontFamily="var(--hk-mono)" fontSize={34} fontWeight={900}
+        letterSpacing="-1">
         {Math.round(score)}
       </text>
 
       {/* / 100 */}
-      <text x={cx} y={cy + 26} textAnchor="middle"
-        fill="rgba(255,255,255,0.18)" fontFamily="var(--hk-mono)" fontSize={9} letterSpacing={1.5}>
+      <text x={cx} y={cy + 24} textAnchor="middle"
+        fill="rgba(255,255,255,0.22)" fontFamily="var(--hk-mono)" fontSize={9} letterSpacing={1.5}>
         / 100
       </text>
 
-      {/* Level label — sits in the bottom gap */}
-      <text x={cx} y={108} textAnchor="middle"
-        fill={color} fontFamily="var(--hk-mono)" fontSize={9} fontWeight={700} letterSpacing={3}>
+      {/* Level — in the 90° gap at bottom, same muted color as the arc */}
+      <text x={cx} y={106} textAnchor="middle"
+        fill={color} fontFamily="var(--hk-mono)" fontSize={8} fontWeight={700} letterSpacing="0.22em">
         {level.toUpperCase()}
       </text>
     </svg>

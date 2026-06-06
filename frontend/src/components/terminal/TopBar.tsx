@@ -83,22 +83,24 @@ export function TopBar() {
         <span style={{ color: "var(--hk-text)", minWidth: 110 }}>{clock}</span>
         <span style={{ color: "var(--hk-text-mute)" }}>·</span>
 
-        {/* Theme toggle */}
+        {/* Theme toggle — visible in both modes */}
         <button
           type="button"
           onClick={toggleTheme}
           title={isDark ? "Switch to light mode" : "Switch to dark mode"}
           className="hk-bare-btn"
           style={{
-            fontFamily: "var(--hk-mono)", fontSize: 13,
-            color: isDark ? "var(--hk-text-dim)" : "var(--hk-amber)",
-            padding: "2px 6px",
-            border: "1px solid var(--hk-rule)",
+            display: "inline-flex", alignItems: "center", gap: 5,
+            fontFamily: "var(--hk-mono)", fontSize: 10, letterSpacing: "0.1em",
+            color: "var(--hk-amber)",
+            padding: "4px 10px",
+            background: "var(--hk-amber-soft)",
+            border: "1px solid var(--hk-amber-dim)",
             borderRadius: 2,
-            lineHeight: 1,
           }}
         >
-          {isDark ? "☀" : "☾"}
+          <span style={{ fontSize: 12, lineHeight: 1 }}>{isDark ? "☀" : "☾"}</span>
+          <span>{isDark ? "LIGHT" : "DARK"}</span>
         </button>
 
         <span style={{ color: "var(--hk-amber)" }}>v0.3.7</span>
