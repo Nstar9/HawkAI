@@ -43,6 +43,10 @@ export async function listInvestigations(limit = 50): Promise<Investigation[]> {
   return request<Investigation[]>(`/investigations?limit=${limit}`);
 }
 
+export async function deleteInvestigation(id: string): Promise<void> {
+  await request<{ deleted: string }>(`/investigations/${id}`, { method: "DELETE" });
+}
+
 // ---------------------------------------------------------------------------
 // Entities
 // ---------------------------------------------------------------------------

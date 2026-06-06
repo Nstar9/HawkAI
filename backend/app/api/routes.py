@@ -101,7 +101,7 @@ async def add_entity_note(entity_id: str, payload: NoteCreate) -> Entity:
 
 
 # ---------------------------------------------------------------------------
-# Maintenance — clean up failed investigations
+# Maintenance
 # ---------------------------------------------------------------------------
 
 
@@ -111,6 +111,18 @@ async def delete_failed_investigations() -> dict[str, int]:
     db = get_mongodb_service()
     result = await db.db["investigations"].delete_many({"status": "failed"})
     return {"deleted": result.deleted_count}
+
+
+@router.delete("/investigations/{investigation_id}")
+async def delete_investigation(investigation_id: str) -> dict[str, str]:
+    """Delete a specific investigation and its associated risk signals."""
+    db = get_mongodb_service()
+    inv = await db.get_investigation(investigation_id)
+    if inv is None:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+    await db.db["investigations"].delete_one({"_id": investigation_id})
+    await db.db["risk_signals"].delete_many({"investigation_id": investigation_id})
+    return {"deleted": investigation_id}
 
 
 # ---------------------------------------------------------------------------
