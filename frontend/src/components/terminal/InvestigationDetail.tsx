@@ -354,7 +354,7 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
           )}
 
           {/* ── Report content ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 28, minWidth: 0 }}>
+          <div className="hk-report-grid" style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 28, minWidth: 0 }}>
 
             {/* LEFT: The actual report */}
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -523,7 +523,7 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
             </div>
 
             {/* RIGHT: Sidebar */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="hk-report-sidebar" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
               {/* Risk breakdown */}
               {report?.risk_breakdown && Object.keys(report.risk_breakdown).length > 0 && (

@@ -136,13 +136,81 @@ html, body {
 }
 .hk-cursor { animation: hk-cursor-blink 1.1s step-end infinite; }
 
+/* ── Light mode ─────────────────────────────────────────────── */
+html[data-theme="light"] {
+  --hk-bg:        #f4f0e8;
+  --hk-bg-2:      #ebe7dc;
+  --hk-surface:   #e7e2d7;
+  --hk-surface-2: #dedad0;
+  --hk-rule:      #c8c3b8;
+  --hk-rule-soft: #d2cec4;
+  --hk-text:      #1a1510;
+  --hk-text-dim:  #4c4840;
+  --hk-text-mute: #8c887e;
+  --hk-amber:      #b87400;
+  --hk-amber-dim:  #8a5a00;
+  --hk-amber-soft: rgba(184, 116, 0, 0.08);
+  --hk-red:       #c42030;
+  --hk-red-dim:   #961828;
+  --hk-green:     #1a7040;
+  --hk-green-dim: #125430;
+  --hk-purple:    #5a36b4;
+  --hk-blue:      #1a4ca0;
+}
+
+html[data-theme="light"] body {
+  background: var(--hk-bg);
+}
+
+html[data-theme="light"] .hk-shell {
+  background: var(--hk-bg);
+  background-image: none;
+}
+
+html[data-theme="light"] .hk-shell::before {
+  display: none;
+}
+
 /* ── Print / PDF export ─────────────────────────────────────── */
 @media print {
-  .hk-shell::before { display: none; }      /* remove scanlines */
-  body { background: #fff !important; color: #000 !important; overflow: visible !important; }
+  /* Remove all height and overflow constraints so all content renders */
+  html {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #0a0d12 !important;
+    color: #e9e2d0 !important;
+  }
+  .hk-shell {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    background: #0a0d12 !important;
+    background-image: none !important;
+  }
+  .hk-shell::before { display: none !important; }
+  .hk-shell > div {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    min-height: 0 !important;
+  }
+  main {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    display: block !important;
+  }
+  /* Hide terminal chrome */
   nav, aside, button { display: none !important; }
-  main { overflow: visible !important; }
-  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Collapse report grid to single column, hide sidebar */
+  .hk-report-grid { display: block !important; }
+  .hk-report-sidebar { display: none !important; }
+  /* Preserve colors */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 
 /* amber pulse for active pipeline step */
