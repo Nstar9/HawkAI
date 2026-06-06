@@ -25,28 +25,38 @@ function RiskGauge({ score, level }: { score: number; level: string }) {
   const circ = 2 * Math.PI * r;
   const dash = circ * Math.min(score / 100, 1);
   const color =
-    level === "critical" ? "var(--hk-red)"   :
-    level === "high"     ? "var(--hk-red)"   :
-    level === "medium"   ? "var(--hk-amber)" :
-    "var(--hk-green)";
+    level === "critical" ? "#ff5562" :
+    level === "high"     ? "#ff7a42" :
+    level === "medium"   ? "#f4b942" :
+    "#5cffa3";
   return (
     <svg viewBox="0 0 100 100" width={100} height={100} aria-label={`Risk ${Math.round(score)}`}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={6} />
+      {/* Track */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={5} />
+      {/* Score arc — subtle glow only */}
       <circle
         cx={cx} cy={cy} r={r} fill="none"
-        stroke={color} strokeWidth={6}
+        stroke={color} strokeWidth={5}
         strokeDasharray={`${dash} ${circ - dash}`}
         strokeLinecap="round"
         transform="rotate(-90 50 50)"
-        style={{ transition: "stroke-dasharray 0.8s ease", filter: `drop-shadow(0 0 8px ${color})` }}
+        style={{ transition: "stroke-dasharray 0.8s ease", filter: `drop-shadow(0 0 3px ${color})` }}
       />
-      <text x={cx} y={cy - 2} textAnchor="middle" fill={color}
-        fontFamily="var(--hk-mono)" fontSize={24} fontWeight={800}>
+      {/* Score number — always cream, never the risk color */}
+      <text x={cx} y={cy + 8} textAnchor="middle"
+        fill="#e9e2d0" fontFamily="var(--hk-mono)" fontSize={26} fontWeight={900}
+        letterSpacing="-1">
         {Math.round(score)}
       </text>
-      <text x={cx} y={cy + 13} textAnchor="middle" fill="rgba(255,255,255,0.3)"
-        fontFamily="var(--hk-mono)" fontSize={9} letterSpacing={2}>
-        /100
+      {/* /100 label */}
+      <text x={cx} y={cy + 20} textAnchor="middle" fill="rgba(255,255,255,0.25)"
+        fontFamily="var(--hk-mono)" fontSize={8} letterSpacing={1.5}>
+        / 100
+      </text>
+      {/* Risk level label */}
+      <text x={cx} y={cy - 14} textAnchor="middle" fill={color}
+        fontFamily="var(--hk-mono)" fontSize={7} fontWeight={700} letterSpacing={2}>
+        {level.toUpperCase()}
       </text>
     </svg>
   );
