@@ -109,13 +109,17 @@ def _calculate_risk_score(signals: list) -> float:
     score = 0.60 * max_base + 0.40 * avg + breadth_bonus
 
     # ── Hard score ceiling based on signal type profile ───────────────────────
-    # CRITICAL risk requires confirmed fraud or active sanctions exposure.
-    # Regulatory/governance signals alone (however numerous) reflect oversight,
-    # not criminal exposure — cap them to MEDIUM at most (< 52 HIGH threshold).
-    has_fraud_or_sanctions = any(
-        s.signal_type.value in ("fraud", "sanctions") for s in signals
+    # CRITICAL risk requires CONFIRMED (HIGH or CRITICAL severity) fraud or
+    # sanctions signals — not just a keyword-match watchlist indicator.
+    # A LOW-severity sanctions signal from a watchlist pattern match must NOT
+    # bypass this ceiling (that would false-CRITICAL a company that merely
+    # mentions "sanctions screening" in its compliance documentation).
+    has_confirmed_fraud_or_sanctions = any(
+        s.signal_type.value in ("fraud", "sanctions")
+        and s.severity.value in ("high", "critical")
+        for s in signals
     )
-    if not has_fraud_or_sanctions:
+    if not has_confirmed_fraud_or_sanctions:
         has_any_high = any(s.severity.value == "high" for s in signals)
         if has_any_high:
             # e.g. major SEC enforcement but no criminal fraud → MEDIUM
@@ -224,17 +228,11 @@ SEVERITY CALIBRATION — be strict and proportionate:
 • medium — regulatory inquiry or consent order without admitted wrongdoing OR civil lawsuit OR historical enforcement action resolved >3 years ago OR adverse media from credible named sources
 • low — minor regulatory notice OR standard compliance requirements OR old resolved matter (>10 years) OR unconfirmed allegation
 
-PROPORTIONALITY IS CRITICAL — apply these rules:
-• Large regulated institutions (major banks, brokers, asset managers with >$100B AUM or >$10B assets) face routine regulatory oversight — do NOT rate standard compliance matters as HIGH or CRITICAL
-• A fine that is <0.1% of assets under management is routine for large institutions — rate it MEDIUM at most
-• Normal shareholder litigation, SEC comment letters, and routine FINRA examinations are LOW signals at major regulated entities
-• Only escalate to HIGH/CRITICAL when there is CONFIRMED intentional misconduct, criminal activity, or sanctions violation
-
-DO NOT classify as HIGH or CRITICAL:
-• Routine SEC/FINRA/regulatory oversight filings for large institutions
-• Industry-standard compliance requirements
-• Shareholder class actions settled without admission of wrongdoing
-• Historical resolved issues with no recent recurrence
+PROPORTIONALITY — apply these rules before assigning severity:
+• Confirmed enforcement actions (SEC fines, consent orders, DOJ settlements) should ALWAYS be classified — use MEDIUM for large regulated institutions where the fine is <1% of AUM/revenue, HIGH if >1% or involves admitted wrongdoing
+• Do NOT return an empty array just because the entity is large and regulated — classify real enforcement actions as MEDIUM signals
+• Normal shareholder litigation, SEC comment letters, and routine FINRA examinations at major entities → LOW
+• Large institutions with >$100B AUM: escalate to HIGH only for intentional misconduct or criminal charges; do NOT escalate to CRITICAL for civil settlements without criminal conviction
 
 CONFIDENCE GUIDE:
 • 0.90–1.00 — confirmed by official regulatory/court record or company disclosure
@@ -272,15 +270,19 @@ Deduplicate — one signal per distinct incident. If no qualifying signals found
         raw_signals = []
         logger.warning("classify_and_store_signals: invalid JSON response, using empty list")
 
-    # Add watchlist seed matches
+    # Add watchlist seed matches — keyword indicators only, NOT confirmed findings.
+    # Severity is always "low": a pattern match tells a human to check, it is
+    # NOT confirmation of sanctions exposure or fraud. Setting severity higher
+    # causes false-CRITICAL scores at large regulated institutions whose research
+    # text mentions terms like "sanctions screening" in a compliance context.
     watchlist_hits = await db.match_watchlist_seeds(research_brief)
     for hit in watchlist_hits:
         raw_signals.append({
             "signal_type": hit.get("signal_type", "other"),
-            "severity": hit.get("severity", "medium"),
-            "title": f"Watchlist pattern: {hit.get('pattern', 'risk indicator')}",
-            "description": hit.get("description", "Matched against HawkAI watchlist pattern."),
-            "confidence": 0.72,
+            "severity": "low",    # Hard-coded LOW — pattern match ≠ confirmed finding
+            "title": f"Watchlist indicator: {hit.get('pattern', 'risk indicator')}",
+            "description": hit.get("description", "Matched against HawkAI watchlist pattern. Requires manual verification against official databases."),
+            "confidence": 0.52,   # Just above filter threshold — not a confirmed signal
             "sources": ["hawkai_internal_watchlist"],
         })
 
