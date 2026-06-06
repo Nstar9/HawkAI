@@ -292,15 +292,22 @@ Deduplicate — one signal per distinct incident. If no qualifying signals found
     # These caps enforce our severity taxonomy regardless of model output.
     # CRITICAL severity is only valid for confirmed fraud or active sanctions.
     for item in raw_signals:
-        stype = item.get("signal_type", "other")
-        sev   = item.get("severity", "medium")
-        max_ok = _MAX_SEVERITY_BY_TYPE.get(stype, "medium")
-        if _SEV_ORDER.index(sev) > _SEV_ORDER.index(max_ok):
-            logger.info(
-                "Severity cap: %s signal %s → %s for entity '%s'",
-                stype, sev, max_ok, entity_name,
-            )
-            item["severity"] = max_ok
+        try:
+            stype  = str(item.get("signal_type", "other")).lower().strip()
+            sev    = str(item.get("severity", "medium")).lower().strip()
+            # Normalise any non-standard value Gemini might emit (e.g. "HIGH", " high ")
+            if sev not in _SEV_ORDER:
+                sev = "medium"
+                item["severity"] = sev
+            max_ok = _MAX_SEVERITY_BY_TYPE.get(stype, "medium")
+            if _SEV_ORDER.index(sev) > _SEV_ORDER.index(max_ok):
+                logger.info(
+                    "Severity cap: %s signal %s → %s for entity '%s'",
+                    stype, sev, max_ok, entity_name,
+                )
+                item["severity"] = max_ok
+        except Exception as _cap_err:
+            logger.warning("Severity cap skipped for signal '%s': %s", item.get("title"), _cap_err)
 
     created: list[dict[str, Any]] = []
     for item in raw_signals:
