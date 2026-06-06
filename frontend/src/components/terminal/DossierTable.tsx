@@ -237,14 +237,15 @@ export function DossierTable({ investigations, highlightId, onDelete, watchedIds
                 className="hk-bare-btn"
                 title={watchedIds?.has(r._invId) ? "Remove from watchlist" : "Add to watchlist"}
                 style={{
-                  fontFamily: "var(--hk-mono)", fontSize: 13,
+                  fontSize: 17, lineHeight: 1,
                   color: watchedIds?.has(r._invId) ? "var(--hk-amber)" : "var(--hk-text-mute)",
-                  opacity: watchedIds?.has(r._invId) ? 1 : 0.35,
-                  padding: "2px 3px", borderRadius: 2,
+                  opacity: watchedIds?.has(r._invId) ? 1 : 0.4,
+                  padding: "2px 4px", borderRadius: 2,
                   transition: "opacity 0.12s, color 0.12s",
+                  filter: watchedIds?.has(r._invId) ? "drop-shadow(0 0 4px rgba(244,185,66,0.6))" : "none",
                 }}
                 onMouseEnter={e => { e.currentTarget.style.opacity = "1"; }}
-                onMouseLeave={e => { e.currentTarget.style.opacity = watchedIds?.has(r._invId) ? "1" : "0.35"; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = watchedIds?.has(r._invId) ? "1" : "0.4"; }}
               >
                 {watchedIds?.has(r._invId) ? "★" : "☆"}
               </button>

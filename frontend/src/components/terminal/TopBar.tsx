@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Logo, Dot } from "./atoms";
 
 export function TopBar() {
+  const router = useRouter();
   const [clock, setClock]   = useState("");
   const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
-    // Restore saved theme on mount
     const saved = localStorage.getItem("hk-theme");
     const dark = saved !== "light";
     setIsDark(dark);
@@ -49,10 +50,19 @@ export function TopBar() {
       position: "relative",
       zIndex: 2,
     }}>
-      <Logo subtitle="TERMINAL" />
+      {/* Logo — click to go home */}
+      <button
+        type="button"
+        onClick={() => router.push("/")}
+        className="hk-bare-btn"
+        title="Go to terminal home"
+        style={{ display: "flex", alignItems: "center", padding: "4px 0", borderRadius: 3 }}
+      >
+        <Logo subtitle="TERMINAL" />
+      </button>
 
       <div style={{
-        display: "flex", alignItems: "center", gap: 14, marginLeft: 14,
+        display: "flex", alignItems: "center", gap: 14, marginLeft: 6,
         fontFamily: "var(--hk-mono)", fontSize: 11, color: "var(--hk-text-dim)",
       }}>
         <span><span style={{ color: "var(--hk-text-mute)" }}>SESSION</span> 7F-2841</span>

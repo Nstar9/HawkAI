@@ -83,25 +83,27 @@ export interface LogoProps {
 
 export function Logo({ subtitle = "TERMINAL" }: LogoProps) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
-        <circle cx="11" cy="11" r="9.5" fill="none" stroke="var(--hk-amber)" strokeWidth="1" />
-        <circle cx="11" cy="11" r="3"   fill="none" stroke="var(--hk-amber)" strokeWidth="1" />
-        <circle cx="11" cy="11" r="1"   fill="var(--hk-amber)" />
-        <line x1="11" y1="0"  x2="11" y2="5"  stroke="var(--hk-amber)" />
-        <line x1="11" y1="17" x2="11" y2="22" stroke="var(--hk-amber)" />
-        <line x1="0"  y1="11" x2="5"  y2="11" stroke="var(--hk-amber)" />
-        <line x1="17" y1="11" x2="22" y2="11" stroke="var(--hk-amber)" />
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"
+        style={{ filter: "drop-shadow(0 0 4px rgba(244,185,66,0.5))" }}>
+        <circle cx="14" cy="14" r="12.5" fill="none" stroke="var(--hk-amber)" strokeWidth="1.2" />
+        <circle cx="14" cy="14" r="4.5"  fill="none" stroke="var(--hk-amber)" strokeWidth="1" opacity={0.7} />
+        <circle cx="14" cy="14" r="1.5"  fill="var(--hk-amber)" />
+        <line x1="14" y1="0"  x2="14" y2="6.5"  stroke="var(--hk-amber)" strokeWidth="1.2" />
+        <line x1="14" y1="21.5" x2="14" y2="28" stroke="var(--hk-amber)" strokeWidth="1.2" />
+        <line x1="0"  y1="14" x2="6.5"  y2="14" stroke="var(--hk-amber)" strokeWidth="1.2" />
+        <line x1="21.5" y1="14" x2="28" y2="14" stroke="var(--hk-amber)" strokeWidth="1.2" />
       </svg>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{
-          fontFamily: "var(--hk-mono)", fontWeight: 700, fontSize: 14,
-          color: "var(--hk-text)", letterSpacing: "0.06em",
+          fontFamily: "var(--hk-mono)", fontWeight: 800, fontSize: 17,
+          color: "var(--hk-text)", letterSpacing: "0.12em",
+          textShadow: "0 0 20px rgba(244,185,66,0.15)",
         }}>HAWKAI</span>
         {subtitle && (
           <span style={{
-            fontFamily: "var(--hk-mono)", fontSize: 10,
-            color: "var(--hk-amber)", letterSpacing: "0.16em",
+            fontFamily: "var(--hk-mono)", fontSize: 11,
+            color: "var(--hk-amber)", letterSpacing: "0.18em", opacity: 0.85,
           }}>// {subtitle}</span>
         )}
       </div>

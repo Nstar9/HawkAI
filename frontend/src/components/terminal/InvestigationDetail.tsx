@@ -19,43 +19,103 @@ const TOOL_TO_STEP_IDX: Record<string, number> = {
   "synthesize_risk_report":       5,
 };
 
-// ── Risk gauge SVG ─────────────────────────────────────────────
+// ── Risk gauge SVG — 270° speedometer arc ─────────────────────
 function RiskGauge({ score, level }: { score: number; level: string }) {
-  const r = 38, cx = 50, cy = 50;
-  const circ = 2 * Math.PI * r;
-  const dash = circ * Math.min(score / 100, 1);
+  const cx = 60, cy = 58, r = 44;
   const color =
-    level === "critical" ? "#ff5562" :
+    level === "critical" ? "#ff4455" :
     level === "high"     ? "#ff7a42" :
     level === "medium"   ? "#f4b942" :
     "#5cffa3";
+
+  // 270° arc: starts bottom-left (rotate 135°), gap at bottom
+  const circ       = 2 * Math.PI * r;
+  const arcLength  = circ * 0.75;                          // 270° = 75% of circle
+  const scoreDash  = arcLength * Math.min(score / 100, 1); // filled portion
+
+  // Tick marks at 0%, 25%, 50%, 75%, 100% of the arc
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => {
+    const angle = (135 + t * 270) * (Math.PI / 180); // degrees → radians
+    const inner = r - 6, outer = r + 1;
+    return {
+      x1: cx + Math.cos(angle) * inner,
+      y1: cy + Math.sin(angle) * inner,
+      x2: cx + Math.cos(angle) * outer,
+      y2: cy + Math.sin(angle) * outer,
+    };
+  });
+
+  const filterId = `hk-gauge-glow-${level}`;
+
   return (
-    <svg viewBox="0 0 100 100" width={100} height={100} aria-label={`Risk ${Math.round(score)}`}>
-      {/* Track */}
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={5} />
-      {/* Score arc — subtle glow only */}
-      <circle
-        cx={cx} cy={cy} r={r} fill="none"
-        stroke={color} strokeWidth={5}
-        strokeDasharray={`${dash} ${circ - dash}`}
-        strokeLinecap="round"
-        transform="rotate(-90 50 50)"
-        style={{ transition: "stroke-dasharray 0.8s ease", filter: `drop-shadow(0 0 3px ${color})` }}
+    <svg viewBox="0 0 120 118" width={130} height={126} aria-label={`Risk ${Math.round(score)}`}>
+      <defs>
+        <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
+          {/* Outer soft bloom */}
+          <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+          {/* Tight inner glow */}
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur2" />
+          <feMerge>
+            <feMergeNode in="blur1" />
+            <feMergeNode in="blur2" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
+      {/* Ambient center fill */}
+      <circle cx={cx} cy={cy} r={r - 8} fill={`${color}09`} />
+
+      {/* Background track — 270° */}
+      <circle cx={cx} cy={cy} r={r}
+        fill="none"
+        stroke="rgba(255,255,255,0.06)"
+        strokeWidth={8}
+        strokeDasharray={`${arcLength} 999`}
+        strokeLinecap="butt"
+        transform={`rotate(135 ${cx} ${cy})`}
       />
-      {/* Score number — always cream, never the risk color */}
-      <text x={cx} y={cy + 8} textAnchor="middle"
-        fill="#e9e2d0" fontFamily="var(--hk-mono)" fontSize={26} fontWeight={900}
-        letterSpacing="-1">
+
+      {/* Tick marks */}
+      {ticks.map((t, i) => (
+        <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+          stroke="rgba(255,255,255,0.12)" strokeWidth={1}
+        />
+      ))}
+
+      {/* Progress arc — glowing */}
+      <circle cx={cx} cy={cy} r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={8}
+        strokeDasharray={`${scoreDash} 999`}
+        strokeLinecap="round"
+        transform={`rotate(135 ${cx} ${cy})`}
+        filter={`url(#${filterId})`}
+        style={{ transition: "stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1)" }}
+      />
+
+      {/* Thin inner accent ring */}
+      <circle cx={cx} cy={cy} r={r - 14}
+        fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={1}
+      />
+
+      {/* Score number — hero element */}
+      <text x={cx} y={cy + 14} textAnchor="middle"
+        fill="#eee8d5" fontFamily="var(--hk-mono)" fontSize={36} fontWeight={900}
+        letterSpacing="-1.5">
         {Math.round(score)}
       </text>
-      {/* /100 label */}
-      <text x={cx} y={cy + 20} textAnchor="middle" fill="rgba(255,255,255,0.25)"
-        fontFamily="var(--hk-mono)" fontSize={8} letterSpacing={1.5}>
+
+      {/* / 100 */}
+      <text x={cx} y={cy + 26} textAnchor="middle"
+        fill="rgba(255,255,255,0.18)" fontFamily="var(--hk-mono)" fontSize={9} letterSpacing={1.5}>
         / 100
       </text>
-      {/* Risk level label */}
-      <text x={cx} y={cy - 14} textAnchor="middle" fill={color}
-        fontFamily="var(--hk-mono)" fontSize={7} fontWeight={700} letterSpacing={2}>
+
+      {/* Level label — sits in the bottom gap */}
+      <text x={cx} y={108} textAnchor="middle"
+        fill={color} fontFamily="var(--hk-mono)" fontSize={9} fontWeight={700} letterSpacing={3}>
         {level.toUpperCase()}
       </text>
     </svg>
@@ -69,6 +129,7 @@ function riskColor(level: string) {
     : "var(--hk-green)";
 }
 
+// Short chip abbrevs for signal cards (kept terse)
 function sigAbbrev(type: string) {
   const m: Record<string, string> = {
     reputational: "REPU", financial: "FINC", regulatory: "REGL",
@@ -76,6 +137,16 @@ function sigAbbrev(type: string) {
     fraud: "FRAD", other: "OTHR",
   };
   return m[type] ?? type.slice(0, 4).toUpperCase();
+}
+
+// Full names for the risk breakdown sidebar — human-readable
+function sigFull(type: string) {
+  const m: Record<string, string> = {
+    reputational: "REPUTATION", financial: "FINANCIAL", regulatory: "REGULATORY",
+    litigation:   "LITIGATION", sanctions:  "SANCTIONS",  governance: "GOVERNANCE",
+    fraud:        "FRAUD",      other:       "OTHER",
+  };
+  return m[type.toLowerCase()] ?? type.toUpperCase().slice(0, 10);
 }
 
 // Category tag color for findings
@@ -549,11 +620,11 @@ export function InvestigationDetail({ id, initialInvestigation, initialEntity }:
                         return (
                           <div key={cat} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <span style={{
-                              fontFamily: "var(--hk-mono)", fontSize: 10, fontWeight: 700,
-                              color, padding: "1px 5px", border: `1px solid ${color}`,
-                              borderRadius: 2, flexShrink: 0, width: 46, textAlign: "center",
-                              opacity: 0.85,
-                            }}>{sigAbbrev(cat)}</span>
+                              fontFamily: "var(--hk-mono)", fontSize: 9, fontWeight: 700,
+                              color, padding: "2px 6px", border: `1px solid ${color}`,
+                              borderRadius: 2, flexShrink: 0, minWidth: 80, textAlign: "center",
+                              letterSpacing: "0.08em", opacity: 0.9,
+                            }}>{sigFull(cat)}</span>
                             <div style={{ flex: 1, height: 2, background: "var(--hk-rule)", borderRadius: 1, position: "relative" }}>
                               <div style={{
                                 position: "absolute", left: 0, top: 0, bottom: 0,
