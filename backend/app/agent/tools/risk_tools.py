@@ -287,18 +287,26 @@ Deduplicate — one signal per distinct incident. If no qualifying signals found
     # Filter out low-confidence signals before persisting
     raw_signals = [s for s in raw_signals if float(s.get("confidence", 0)) >= 0.50]
 
-    # ── Apply severity caps by signal type (programmatic guardrail) ──────────
-    # Gemini sometimes over-classifies routine matters as CRITICAL/HIGH.
-    # These caps enforce our severity taxonomy regardless of model output.
-    # CRITICAL severity is only valid for confirmed fraud or active sanctions.
+    # ── Normalise + apply severity caps by signal type ───────────────────────
+    # Gemini sometimes returns signal_type as a list ["sanctions", "fraud"]
+    # instead of a single string, or severity as "HIGH" (uppercase). Both
+    # crash downstream set-membership checks. Normalise in one pass, then cap.
     for item in raw_signals:
         try:
-            stype  = str(item.get("signal_type", "other")).lower().strip()
-            sev    = str(item.get("severity", "medium")).lower().strip()
-            # Normalise any non-standard value Gemini might emit (e.g. "HIGH", " high ")
+            # Normalise signal_type: take first element if Gemini returned a list
+            raw_stype = item.get("signal_type", "other")
+            if isinstance(raw_stype, list):
+                raw_stype = raw_stype[0] if raw_stype else "other"
+            stype = str(raw_stype).lower().strip()
+            item["signal_type"] = stype   # write back so main loop sees a plain string
+
+            # Normalise severity: lowercase + strip, default if unrecognised
+            sev = str(item.get("severity", "medium")).lower().strip()
             if sev not in _SEV_ORDER:
                 sev = "medium"
-                item["severity"] = sev
+            item["severity"] = sev        # write back
+
+            # Apply severity ceiling for this signal type
             max_ok = _MAX_SEVERITY_BY_TYPE.get(stype, "medium")
             if _SEV_ORDER.index(sev) > _SEV_ORDER.index(max_ok):
                 logger.info(
