@@ -64,11 +64,12 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
          │     ResearchAgent       │  │        IntelligenceAgent           │
          │   gemini-2.5-flash      │  │        gemini-2.5-flash            │
          │   google_search (live)  │  │  + gemini-2.5-pro for synthesis    │
-         │   2 targeted searches   │  │  6 custom async Python tools       │
+         │   2 targeted searches   │  │  7 custom async Python tools       │
          └────────────────────────┘  └──────────────┬────────────────────┘
                                                      │
                                   ┌──────────────────┤
                                   │  lookup_entity_via_mcp        → MongoDB MCP Server (ADK MCPToolset)
+                                  │  check_ofac_sanctions         → MongoDB MCP Server → sanctions_lists (17,557 SDN entries)
                                   │  extract_and_store_entity     → Motor async upsert
                                   │  run_vector_similarity_search → $vectorSearch aggregation
                                   │  find_correlated_entities     → Motor async find
@@ -79,6 +80,7 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
                     ┌────────────────────────────────▼──────────────────────┐
                     │                   MongoDB Atlas M0                     │
                     │   investigations · entities · risk_signals             │
+                    │   sanctions_lists (OFAC SDN — 17,557 entries)          │
                     │   Vector Search Index (768-dim cosine)                 │
                     │   gemini-embedding-001 embeddings                      │
                     └────────────────────────────────────────────────────────┘
@@ -89,7 +91,7 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
 | Decision | Why |
 |---|---|
 | **SequentialAgent** | ADK constraint: `google_search` cannot share a session with database tools. Two agents, one pipeline. |
-| **MongoDB MCP Server + Motor dual-driver** | Every investigation starts with `lookup_entity_via_mcp` — ADK MCPToolset + pre-installed `mongodb-mcp-server` binary checks for existing profiles and enumerates available MCP operations. Motor async driver handles all writes (upserts, inserts, updates) because it provides atomic operations and guaranteed lifecycle in Cloud Run's serverless environment, where stdio child-process lifetime is not guaranteed across request boundaries. |
+| **MongoDB MCP Server + Motor dual-driver** | Two MCP tools run on every investigation: `lookup_entity_via_mcp` checks for existing profiles; `check_ofac_sanctions` screens against the pre-loaded OFAC SDN list (17,557 US Treasury sanctioned entities). Both use ADK MCPToolset + pre-installed `mongodb-mcp-server`. Motor handles all writes for atomic guarantees in Cloud Run's serverless environment. |
 | **Tiered Gemini models** | `gemini-2.5-flash` for agent orchestration (fast, live search, tool calling); `gemini-2.5-pro` for signal classification + report synthesis (highest output quality). |
 | **Person disambiguation** | Optional `context` field (company, role, country, year) sent with person investigations to identify the right individual among common names. |
 | **Evidence-weighted scoring** | 60% max-severity floor + 40% weighted signal average + signal-breadth bonus. One CRITICAL signal guarantees a CRITICAL (75+) score. |
@@ -108,7 +110,7 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
 | Embeddings | **gemini-embedding-001** (768-dim) |
 | Web Research | Google Search grounding (ADK built-in, live OSINT) |
 | Database | **MongoDB Atlas M0** (free tier) |
-| DB Protocol | **MongoDB MCP Server** (`mongodb-mcp-server`) via ADK MCPToolset — entity lookup |
+| DB Protocol | **MongoDB MCP Server** (`mongodb-mcp-server`) via ADK MCPToolset — entity lookup + OFAC SDN screening |
 | DB Driver | **Motor async driver** — writes, vector search, signal storage |
 | Vector Search | MongoDB Atlas `$vectorSearch` (cosine, 768-dim) |
 | Backend | **FastAPI** + asyncio + SSE |
