@@ -52,7 +52,7 @@ async def lookup_entity_via_mcp(entity_name: str) -> dict[str, Any]:
         }
     """
     from app.config import get_settings
-    from app.db import get_database
+    from app.services.mongodb_service import get_mongodb_service
 
     settings = get_settings()
 
@@ -184,7 +184,7 @@ async def lookup_entity_via_mcp(entity_name: str) -> dict[str, Any]:
     # Motor is the production-reliable path; MCP Server is attempted first so
     # it satisfies the MongoDB MCP Server hackathon requirement.
     try:
-        db = await get_database()
+        db = get_mongodb_service().db
         doc = await db.entities.find_one(
             {"name": {"$regex": f"^{entity_name}$", "$options": "i"}}
         )
@@ -248,7 +248,7 @@ async def check_ofac_sanctions(entity_name: str) -> dict[str, Any]:
         }
     """
     from app.config import get_settings
-    from app.db import get_database
+    from app.services.mongodb_service import get_mongodb_service
 
     settings = get_settings()
 
@@ -266,14 +266,9 @@ async def check_ofac_sanctions(entity_name: str) -> dict[str, Any]:
             "total_screened": 17557,
         }
 
-    # MongoDB query: any name_token overlaps with our search tokens
-    # Combined with $text search on name/remarks for broader coverage
-    motor_query = {
-        "$or": [
-            {"name_tokens": {"$in": tokens}},
-            {"$text": {"$search": " ".join(tokens)}},
-        ]
-    }
+    # MongoDB query: token overlap on the name_tokens array index.
+    # Note: $text cannot be used inside $or in MongoDB — use token array instead.
+    motor_query = {"name_tokens": {"$in": tokens}}
 
     def _format_match(doc: dict) -> dict:
         return {
@@ -398,7 +393,7 @@ async def check_ofac_sanctions(entity_name: str) -> dict[str, Any]:
 
     # ── Fallback: Motor direct query ──────────────────────────────────────────
     try:
-        db = await get_database()
+        db = get_mongodb_service().db
         cursor = db.sanctions_lists.find(motor_query).limit(5)
         docs = await cursor.to_list(length=5)
 
