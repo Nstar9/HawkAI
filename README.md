@@ -133,6 +133,18 @@ Every pipeline step, tool call, and agent output is streamed in real time to the
 
 ---
 
+## Screenshots
+
+| Dossier Table | Investigation Report |
+|---|---|
+| ![Dossier](docs/screenshots/dossier.png) | ![Report](docs/screenshots/report_ftx.png) |
+
+| Entity Risk Network | Risk Signals |
+|---|---|
+| ![Correlations](docs/screenshots/correlations.png) | ![Signals](docs/screenshots/signals.png) |
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -176,16 +188,22 @@ docker-compose up --build
 
 ## Demo Investigations
 
+Verified live scores from the deployed system:
+
 | Entity | Type | Score | Level | Notable Signals |
 |---|---|---|---|---|
-| FTX Ventures | FUND | 95 | CRITICAL | Wire fraud conviction, CFTC $12.7B consent order, Chapter 11 bankruptcy |
-| Sam Bankman-Fried | PERSON | 93 | CRITICAL | 7 criminal counts, 25-year sentence, customer fund misappropriation |
-| Celsius Network | COMPANY | 91 | CRITICAL | Bankruptcy, $4.7B customer losses, SEC/DOJ enforcement |
-| JPMorgan Chase | COMPANY | 83 | CRITICAL | $13B DOJ settlement, MBS fraud, multiple regulatory actions |
-| Binance | COMPANY | ~78 | HIGH | $4.3B DOJ/FinCEN settlement, BSA violations |
-| Meta Inc | COMPANY | ~42 | MEDIUM | FTC consent orders, Cambridge Analytica, privacy fines |
-| Tesla Inc | COMPANY | ~35 | MEDIUM | SEC settlements, Musk securities violations |
-| BlackRock Inc | COMPANY | ~8 | LOW | Clean — standard regulatory disclosures only |
+| FTX | COMPANY | ~84 | CRITICAL | Founder convicted on 7 counts, 25-year sentence, CFTC $12.7B consent order, Chapter 11 |
+| Sam Bankman-Fried | PERSON | ~81 | CRITICAL | Wire fraud, securities fraud, money laundering — SDNY Docket 22-CR-00673 |
+| Tornado Cash | COMPANY | ~82 | CRITICAL | OFAC-sanctioned, $7B+ laundered including for DPRK hackers |
+| Vanguard | COMPANY | ~77 | HIGH | $146M SEC settlement (Jan 2025), regulatory enforcement history |
+| Meta Inc | COMPANY | ~55 | HIGH | FTC consent orders, Cambridge Analytica, $5B privacy fine |
+| Tesla Inc | COMPANY | ~48 | MEDIUM | Musk SEC securities violations, civil settlement, shareholder litigation |
+| Fidelity Investments | COMPANY | ~28 | MEDIUM | Routine regulatory filings, no material enforcement history |
+| BlackRock Inc | COMPANY | ~8 | LOW | Clean — world's largest asset manager, standard regulatory disclosures |
+
+> **Score interpretation:** 0–21 LOW (standard onboarding) · 22–51 MEDIUM (enhanced monitoring) · 52–79 HIGH (escalate for review) · 80–100 CRITICAL (reject / file SAR)
+>
+> Scores are KYC/AML compliance signals — not investment advice and not legal verdicts.
 
 ---
 

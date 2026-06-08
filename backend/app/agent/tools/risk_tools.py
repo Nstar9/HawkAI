@@ -410,7 +410,15 @@ async def synthesize_risk_report(
     signals = await db.list_risk_signals_for_investigation(investigation_id)
 
     # --- Score and level ---
-    risk_score = _calculate_risk_score(signals)
+    # Exclude watchlist keyword-match indicators from the scoring formula.
+    # They are stored for display/audit purposes but are advisory-only signals
+    # with LOW severity that would otherwise dilute the score for entities like
+    # FTX where 5 watchlist hits drag a legitimate CRITICAL score down to HIGH.
+    scoring_signals = [s for s in signals if not s.title.startswith("Watchlist indicator:")]
+    if not scoring_signals:
+        scoring_signals = signals  # fallback: score everything if no Gemini signals exist
+
+    risk_score = _calculate_risk_score(scoring_signals)
     risk_level = _score_to_level(risk_score)
     breakdown = _build_breakdown(signals)
 
