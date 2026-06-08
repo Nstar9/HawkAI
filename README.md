@@ -2,7 +2,7 @@
 
 > **Autonomous KYC/AML Intelligence Terminal** — research any company, person, or fund and receive a structured financial crime risk report in under 4 minutes, powered by Google ADK · Gemini · MongoDB Atlas.
 
-**Live demo:** [hawk-ai-flax.vercel.app](https://hawk-ai-flax.vercel.app) · **Backend health:** [hawkai-backend-pnkbbvfuoa-uc.a.run.app/api/v1/health](https://hawkai-backend-pnkbbvfuoa-uc.a.run.app/api/v1/health)
+**Live demo:** [hawk-ai-flax.vercel.app](https://hawk-ai-flax.vercel.app) · **Backend health:** [hawkai-backend-46616099912.us-central1.run.app/api/v1/health](https://hawkai-backend-46616099912.us-central1.run.app/api/v1/health)
 
 ---
 
@@ -63,7 +63,7 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
          │     ResearchAgent       │  │        IntelligenceAgent           │
          │   gemini-2.5-flash      │  │        gemini-2.5-flash            │
          │   google_search (live)  │  │  + gemini-2.5-pro for synthesis    │
-         │   2 targeted searches   │  │  5 custom async Python tools       │
+         │   2 targeted searches   │  │  6 custom async Python tools       │
          └────────────────────────┘  └──────────────┬────────────────────┘
                                                      │
                                   ┌──────────────────┤
