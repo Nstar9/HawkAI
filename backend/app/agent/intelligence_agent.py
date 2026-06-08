@@ -28,6 +28,7 @@ from google.adk.agents.llm_agent import LlmAgent
 
 from app.agent.prompts import INTELLIGENCE_AGENT_INSTRUCTION
 from app.agent.tools import (
+    check_ofac_sanctions,
     classify_and_store_signals,
     extract_and_store_entity,
     find_correlated_entities,
@@ -49,12 +50,13 @@ intelligence_agent = LlmAgent(
     ),
     instruction=INTELLIGENCE_AGENT_INSTRUCTION,
     tools=[
-        lookup_entity_via_mcp,       # Step 0 — MCP Server read (check existing profile)
-        extract_and_store_entity,    # Step 1 — Motor upsert entity
-        run_vector_similarity_search,  # Step 2 — Atlas $vectorSearch
-        find_correlated_entities,    # Step 3 — Motor find correlations
-        classify_and_store_signals,  # Step 4 — Gemini-2.5-Pro + Motor insert signals
-        synthesize_risk_report,      # Step 5 — Gemini-2.5-Pro + Motor update report
+        lookup_entity_via_mcp,        # Step 0a — MCP Server: check existing entity profile
+        check_ofac_sanctions,         # Step 0b — MCP Server: screen against OFAC SDN list (17,557 entries)
+        extract_and_store_entity,     # Step 1  — Motor upsert entity
+        run_vector_similarity_search, # Step 2  — Atlas $vectorSearch
+        find_correlated_entities,     # Step 3  — Motor find correlations
+        classify_and_store_signals,   # Step 4  — Gemini-2.5-Pro + Motor insert signals
+        synthesize_risk_report,       # Step 5  — Gemini-2.5-Pro + Motor update report
     ],
     output_key="investigation_result",
 )

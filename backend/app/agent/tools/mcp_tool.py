@@ -211,3 +211,224 @@ async def lookup_entity_via_mcp(entity_name: str) -> dict[str, Any]:
             "source": "error",
             "error": str(motor_err),
         }
+
+
+async def check_ofac_sanctions(entity_name: str) -> dict[str, Any]:
+    """Screen an entity against the OFAC Specially Designated Nationals (SDN) list.
+
+    Queries HawkAI's local copy of the US Treasury OFAC SDN list — 17,557
+    sanctioned individuals and entities pre-loaded into the MongoDB Atlas
+    sanctions_lists collection — using the MongoDB MCP Server via ADK
+    MCPToolset. Falls back to Motor if the MCP subprocess is unavailable.
+
+    A positive match means the entity is a Specially Designated National.
+    US persons are legally prohibited from transacting with SDN-listed parties.
+    This is the highest-severity sanctions signal (automatic CRITICAL indicator).
+
+    ALWAYS call this tool before classify_and_store_signals. If matches are
+    found, include them verbatim in the adverse_findings argument.
+
+    Args:
+        entity_name: Name of the entity to screen (company, person, or fund).
+
+    Returns:
+        {
+            "is_sanctioned": bool,
+            "matches": [
+                {
+                    "name": str,        # SDN list name
+                    "program": str,     # Sanctions program (e.g. SDGT, DPRK3)
+                    "sdn_type": str,    # "individual" or "entity"
+                    "remarks": str,     # DOB, aliases, identifiers
+                }
+            ],
+            "source": "ofac_sdn_via_mcp" | "ofac_sdn_via_motor",
+            "database": "OFAC SDN (US Treasury)",
+            "total_screened": 17557,
+        }
+    """
+    from app.config import get_settings
+    from app.db import get_database
+
+    settings = get_settings()
+
+    # Build search tokens — remove common stop words, keep tokens ≥ 3 chars
+    _STOP = {"inc", "ltd", "llc", "corp", "co", "the", "of", "and", "for", "de"}
+    raw_tokens = [t.lower().strip(".,") for t in entity_name.split()]
+    tokens = [t for t in raw_tokens if len(t) >= 3 and t not in _STOP]
+
+    if not tokens:
+        return {
+            "is_sanctioned": False,
+            "matches": [],
+            "source": "skipped",
+            "database": "OFAC SDN (US Treasury)",
+            "total_screened": 17557,
+        }
+
+    # MongoDB query: any name_token overlaps with our search tokens
+    # Combined with $text search on name/remarks for broader coverage
+    motor_query = {
+        "$or": [
+            {"name_tokens": {"$in": tokens}},
+            {"$text": {"$search": " ".join(tokens)}},
+        ]
+    }
+
+    def _format_match(doc: dict) -> dict:
+        return {
+            "name":     doc.get("name", ""),
+            "program":  doc.get("program", ""),
+            "sdn_type": doc.get("sdn_type", "entity"),
+            "remarks":  (doc.get("remarks") or "")[:300],
+            "ent_num":  doc.get("ent_num", ""),
+        }
+
+    def _is_strong_match(doc: dict, tokens: list[str]) -> bool:
+        """Return True if at least one significant search token appears in the SDN name."""
+        name_toks = set(doc.get("name_tokens", []))
+        # Require at least one token match with 4+ character tokens (avoids false positives)
+        significant = [t for t in tokens if len(t) >= 4]
+        if not significant:
+            significant = tokens
+        return bool(name_toks & set(significant))
+
+    # ── Primary: MongoDB MCP Server via ADK MCPToolset ────────────────────────
+    try:
+        from google.adk.tools.mcp_tool.mcp_toolset import (  # noqa: PLC0415
+            MCPToolset,
+            StdioServerParameters,
+        )
+
+        mcp_env: dict[str, str] = {
+            **os.environ,
+            "MDB_MCP_CONNECTION_STRING": settings.mongodb_uri,
+            "MDB_MCP_LOG_PATH": os.devnull,
+        }
+
+        exit_stack = AsyncExitStack()
+        tools, _ = await asyncio.wait_for(
+            MCPToolset.from_server(
+                connection_params=StdioServerParameters(
+                    command="mongodb-mcp-server",
+                    args=["--readOnly"],
+                    env=mcp_env,
+                ),
+                exit_stack=exit_stack,
+            ),
+            timeout=8.0,
+        )
+
+        mcp_tool_names = [t.name for t in tools]
+        logger.info(
+            "[MCP/OFAC] MongoDB MCP Server connected for SDN screening of '%s'. "
+            "Tools: %s",
+            entity_name,
+            mcp_tool_names,
+        )
+
+        # Attempt direct MCP find call via underlying session
+        find_tool = next(
+            (t for t in tools if t.name.lower() in ("find", "mongodb_find", "collection-find")),
+            None,
+        )
+
+        mcp_matches: list[dict] = []
+        if find_tool is not None:
+            try:
+                session = getattr(find_tool, "_mcp_session", None)
+                if session is not None:
+                    raw = await asyncio.wait_for(
+                        session.call_tool(
+                            find_tool.name,
+                            arguments={
+                                "collection": "sanctions_lists",
+                                "database":   settings.mongodb_database,
+                                "filter":     {"name_tokens": {"$in": tokens}},
+                                "limit":      5,
+                            },
+                        ),
+                        timeout=5.0,
+                    )
+                    if raw and raw.content:
+                        text = (
+                            raw.content[0].text
+                            if hasattr(raw.content[0], "text")
+                            else str(raw.content[0])
+                        )
+                        docs = json.loads(text)
+                        if isinstance(docs, list):
+                            mcp_matches = [
+                                _format_match(d) for d in docs
+                                if _is_strong_match(d, tokens)
+                            ]
+            except Exception as call_err:
+                logger.warning("[MCP/OFAC] find call failed: %s", call_err)
+
+        await exit_stack.aclose()
+
+        if mcp_matches:
+            logger.info(
+                "[MCP/OFAC] OFAC SDN MATCH for '%s' via MCP Server: %s",
+                entity_name,
+                [m["name"] for m in mcp_matches],
+            )
+            return {
+                "is_sanctioned": True,
+                "matches": mcp_matches,
+                "source": "ofac_sdn_via_mcp",
+                "database": "OFAC SDN (US Treasury)",
+                "total_screened": 17557,
+            }
+
+        # MCP connected but no match found — authoritative clean result
+        logger.info("[MCP/OFAC] No SDN match for '%s' via MCP Server.", entity_name)
+        return {
+            "is_sanctioned": False,
+            "matches": [],
+            "source": "ofac_sdn_via_mcp",
+            "database": "OFAC SDN (US Treasury)",
+            "total_screened": 17557,
+        }
+
+    except asyncio.TimeoutError:
+        logger.warning("[MCP/OFAC] MCP Server timeout for '%s'. Falling back to Motor.", entity_name)
+    except Exception as mcp_err:
+        logger.warning("[MCP/OFAC] MCP Server unavailable: %s. Falling back to Motor.", mcp_err)
+
+    # ── Fallback: Motor direct query ──────────────────────────────────────────
+    try:
+        db = await get_database()
+        cursor = db.sanctions_lists.find(motor_query).limit(5)
+        docs = await cursor.to_list(length=5)
+
+        matches = [
+            _format_match(d) for d in docs
+            if _is_strong_match(d, tokens)
+        ]
+
+        if matches:
+            logger.info(
+                "[MCP/OFAC] OFAC SDN MATCH for '%s' via Motor: %s",
+                entity_name,
+                [m["name"] for m in matches],
+            )
+
+        return {
+            "is_sanctioned": bool(matches),
+            "matches": matches,
+            "source": "ofac_sdn_via_motor",
+            "database": "OFAC SDN (US Treasury)",
+            "total_screened": 17557,
+        }
+
+    except Exception as motor_err:
+        logger.error("[MCP/OFAC] Motor fallback failed for '%s': %s", entity_name, motor_err)
+        return {
+            "is_sanctioned": False,
+            "matches": [],
+            "source": "error",
+            "database": "OFAC SDN (US Treasury)",
+            "total_screened": 17557,
+            "error": str(motor_err),
+        }

@@ -83,10 +83,14 @@ Target entity:
 - Type: {entity_type}
 - Investigation ID: {investigation_id}
 
-Execute these 6 steps immediately in order. No commentary between steps.
+Execute these 7 steps immediately in order. No commentary between steps.
 
-STEP 0 — lookup_entity_via_mcp(entity_name="{entity_name}")
-→ Checks MongoDB via the MCP Server for any existing entity profile. Note the result but proceed regardless.
+STEP 0a — lookup_entity_via_mcp(entity_name="{entity_name}")
+→ Checks MongoDB via MCP Server for any existing entity profile. Note result, proceed regardless.
+
+STEP 0b — check_ofac_sanctions(entity_name="{entity_name}")
+→ Screens entity against OFAC SDN list (17,557 US Treasury sanctioned entities) via MCP Server.
+→ IMPORTANT: If is_sanctioned=true, save the matches — you MUST include them verbatim in Step 4 adverse_findings.
 
 STEP 1 — extract_and_store_entity(
     investigation_id="{investigation_id}",
@@ -104,13 +108,13 @@ STEP 4 — classify_and_store_signals(
     investigation_id="{investigation_id}",
     entity_id="<entity_id>",
     research_brief="<the full research brief from above>",
-    adverse_findings="<list the key adverse findings from the brief, comma-separated>"
+    adverse_findings="<adverse findings from brief, PLUS any OFAC SDN matches from Step 0b — include SDN name, program, and ent_num>"
 )
 
 STEP 5 — synthesize_risk_report(investigation_id="{investigation_id}", entity_id="<entity_id>")
 → MANDATORY. This is what completes the investigation. Do NOT stop until this succeeds.
 
-RULES: All 6 steps in order. Use exact entity_id from step 1. On error: log and continue."""
+RULES: All 7 steps in order. Use exact entity_id from step 1. On error: log and continue."""
 
 
 # ---------------------------------------------------------------------------
