@@ -67,11 +67,12 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
          └────────────────────────┘  └──────────────┬────────────────────┘
                                                      │
                                   ┌──────────────────┤
-                                  │  extract_and_store_entity
-                                  │  run_vector_similarity_search → $vectorSearch
-                                  │  find_correlated_entities     → Motor async
-                                  │  classify_and_store_signals   → gemini-2.5-pro
-                                  │  synthesize_risk_report       → gemini-2.5-pro
+                                  │  lookup_entity_via_mcp        → MongoDB MCP Server (ADK MCPToolset)
+                                  │  extract_and_store_entity     → Motor async upsert
+                                  │  run_vector_similarity_search → $vectorSearch aggregation
+                                  │  find_correlated_entities     → Motor async find
+                                  │  classify_and_store_signals   → gemini-2.5-pro + Motor
+                                  │  synthesize_risk_report       → gemini-2.5-pro + Motor
                                   └──────────────────┬──────────────────
                                                      │
                     ┌────────────────────────────────▼──────────────────────┐
@@ -87,7 +88,7 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
 | Decision | Why |
 |---|---|
 | **SequentialAgent** | ADK constraint: `google_search` cannot share a session with database tools. Two agents, one pipeline. |
-| **Custom async tools** (not MCP Server) | `mongodb-mcp-server` spawns a stdio subprocess that crashes reliably in Cloud Run (no guaranteed child process lifecycle). Motor async tools provide identical Atlas access with zero subprocess overhead. |
+| **MongoDB MCP Server + Motor dual-driver** | Every investigation starts with `lookup_entity_via_mcp` — ADK MCPToolset + pre-installed `mongodb-mcp-server` binary checks for existing profiles and enumerates available MCP operations. Motor async driver handles all writes (upserts, inserts, updates) because it provides atomic operations and guaranteed lifecycle in Cloud Run's serverless environment, where stdio child-process lifetime is not guaranteed across request boundaries. |
 | **Tiered Gemini models** | `gemini-2.5-flash` for agent orchestration (fast, live search, tool calling); `gemini-2.5-pro` for signal classification + report synthesis (highest output quality). |
 | **Person disambiguation** | Optional `context` field (company, role, country, year) sent with person investigations to identify the right individual among common names. |
 | **Evidence-weighted scoring** | 60% max-severity floor + 40% weighted signal average + signal-breadth bonus. One CRITICAL signal guarantees a CRITICAL (75+) score. |
@@ -106,8 +107,10 @@ A multi-agent pipeline autonomously searches the web for compliance intelligence
 | Embeddings | **gemini-embedding-001** (768-dim) |
 | Web Research | Google Search grounding (ADK built-in, live OSINT) |
 | Database | **MongoDB Atlas M0** (free tier) |
+| DB Protocol | **MongoDB MCP Server** (`mongodb-mcp-server`) via ADK MCPToolset — entity lookup |
+| DB Driver | **Motor async driver** — writes, vector search, signal storage |
 | Vector Search | MongoDB Atlas `$vectorSearch` (cosine, 768-dim) |
-| Backend | **FastAPI** + asyncio + Motor async driver + SSE |
+| Backend | **FastAPI** + asyncio + SSE |
 | Frontend | **Next.js 14** + TypeScript + App Router |
 | UI | Bloomberg Terminal-style — JetBrains Mono, amber phosphor palette |
 | Deployment | **Google Cloud Run** (us-central1) + **Vercel** |

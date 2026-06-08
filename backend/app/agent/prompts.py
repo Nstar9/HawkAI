@@ -83,7 +83,10 @@ Target entity:
 - Type: {entity_type}
 - Investigation ID: {investigation_id}
 
-Execute these 5 steps immediately in order. No commentary between steps.
+Execute these 6 steps immediately in order. No commentary between steps.
+
+STEP 0 — lookup_entity_via_mcp(entity_name="{entity_name}")
+→ Checks MongoDB via the MCP Server for any existing entity profile. Note the result but proceed regardless.
 
 STEP 1 — extract_and_store_entity(
     investigation_id="{investigation_id}",
@@ -107,7 +110,7 @@ STEP 4 — classify_and_store_signals(
 STEP 5 — synthesize_risk_report(investigation_id="{investigation_id}", entity_id="<entity_id>")
 → MANDATORY. This is what completes the investigation. Do NOT stop until this succeeds.
 
-RULES: All 5 steps in order. Use exact entity_id from step 1. On error: log and continue."""
+RULES: All 6 steps in order. Use exact entity_id from step 1. On error: log and continue."""
 
 
 # ---------------------------------------------------------------------------
